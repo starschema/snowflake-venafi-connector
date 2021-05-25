@@ -1,0 +1,110 @@
+# Welcome to Serverless!
+#
+# This file is the main config file for your service.
+# It's very minimal at this point and uses default values.
+# You can always add more config options for more control.
+# We've included some commented out config examples here.
+# Just uncomment any of them to get that config option.
+#
+# For full config options, check the docs:
+#    docs.serverless.com
+#
+# Happy Coding!
+
+service: lambda-go
+# app and org for use with dashboard.serverless.com
+#app: your-app-name
+#org: your-org-name
+
+# You can pin your service to only deploy with a specific Serverless version
+# Check out our docs for more details
+# frameworkVersion: "=X.X.X"
+
+# plugins:
+#   - serverless-snowflake-external-function-plugin
+
+package:
+  include:
+  - bin/**
+
+
+provider:
+  name: aws
+  runtime: go1.x
+
+# you can overwrite defaults here
+#  stage: dev
+  region: eu-west-1
+
+
+# custom:
+#   snowflake:
+#     role: VENAFI_DEV
+#     account: starschema
+#     username: rakosif
+#     password: Okt1212939!
+#     warehouse: LOAD_WH
+#     database: TEST_DB
+#     schema: PUBLIC
+
+functions:
+  # getCert:
+  #   handler: bin/handlers/get-cert
+  #   package:
+  #    include:
+  #      - ./bin/handlers/get-cert
+  #   events:
+  #     - http:
+  #         path: cert
+  #         method: get
+  #         cors: true
+  # listCerts:
+  #   handler: bin/handlers/list-certs
+  #   package:
+  #     include:
+  #       - ./bin/handlers/list-certs
+  #   events:
+  #     - http:
+  #         path: certs
+  #         method: get
+  requestCert:
+    handler: bin/handlers/requestcert
+    timeout: 65
+    package:
+      include:
+        - ./bin/**
+    events:
+      - http:
+          path: /
+          method: post
+          cors: true
+  # getCertStatus:
+  #   handler: bin/handlers/get-cert-status
+  #   package:
+  #     include:
+  #       - ./bin/handlers/get-cert-status
+  #   events:
+  #     - http:
+  #         path: cert/request
+  #         method: get
+  #         cors: true
+  # renewCert:
+  #     handler: bin/handlers/renew-cert
+  #     package:
+  #       include:
+  #         - ./bin/handlers/renew-cert
+  #     events:
+  #       - http:
+  #           path: cert/renew
+  #           method: patch
+  #           cors: true
+  # revokeCert:
+  #   handler: bin/handlers/revoke-cert
+  #   package:
+  #     include:
+  #       - ./bin/handlers/revoke-cert
+  #   events:
+  #     - http:
+  #         path: cert/revoke
+  #         method: delete
+  #         cors: true
