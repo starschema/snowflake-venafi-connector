@@ -13,7 +13,7 @@ import (
 	"github.com/aws/aws-lambda-go/lambda"
 )
 
-type StuffNeededForRequestCerts struct {
+type VenafiConnectorConfig struct {
 	AccessToken string `json:"token,omitempty"`
 	TppURL      string `json:"tppUrl,omitempty"`
 	Zone        string `json:"zone,omitempty"`
@@ -28,7 +28,7 @@ type SnowFlakeType struct {
 
 func RequestCert(ctx context.Context, request events.APIGatewayProxyRequest) (events.APIGatewayProxyResponse, error) {
 
-	var dataForRequestCert StuffNeededForRequestCerts
+	var dataForRequestCert VenafiConnectorConfig
 	var snowflakeData SnowFlakeType
 	err := json.Unmarshal([]byte(request.Body), &snowflakeData)
 	if err != nil {
