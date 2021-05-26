@@ -3,6 +3,7 @@ package main
 import (
 	"context"
 	"crypto/x509/pkix"
+	"encoding/json"
 	"fmt"
 
 	"github.com/Venafi/vcert/v4"
@@ -21,13 +22,30 @@ type StuffNeededForRequestCerts struct {
 	CommonName  string `json:"	,omitempty"`
 }
 
+type SnowFlakeType struct {
+	Data [][]interface{} `json:"data,omitempty"`
+}
 
-func RequestCert(ctx context.Context, request StuffNeededForRequestCerts) (events.APIGatewayProxyResponse, error) {
+func RequestCert(ctx context.Context, request events.APIGatewayProxyRequest) (events.APIGatewayProxyResponse, error) {
 
-	dataForRequestCert := request
-	//
-	// 0. Get client instance based on connection config
-	//
+	var dataForRequestCert StuffNeededForRequestCerts
+	var snowflakeData SnowFlakeType
+	err := json.Unmarshal([]byte(request.Body), &snowflakeData)
+	if err != nil {
+		fmt.Printf("Failed to unmarshal snowflake value: %v ", err)
+		return events.APIGatewayProxyResponse{ // Error HTTP response
+			Body:       err.Error(),
+			StatusCode: 500,
+		}, nil
+	}
+
+	dataForRequestCert.TppURL = fmt.Sprintf("%v", snowflakeData.Data[0][1])
+	dataForRequestCert.AccessToken = fmt.Sprintf("%v", snowflakeData.Data[0][2])
+	dataForRequestCert.DNSName = fmt.Sprintf("%v", snowflakeData.Data[0][3]) // TODO: UPN, DNS should allow multiple values
+	dataForRequestCert.Zone = fmt.Sprintf("%v", snowflakeData.Data[0][4])
+	dataForRequestCert.UPN = fmt.Sprintf("%v", snowflakeData.Data[0][5])
+	dataForRequestCert.CommonName = fmt.Sprintf("%v", snowflakeData.Data[0][6])
+
 	config := &vcert.Config{
 		ConnectorType: endpoint.ConnectorTypeTPP,
 		BaseUrl:       dataForRequestCert.TppURL,
@@ -35,23 +53,16 @@ func RequestCert(ctx context.Context, request StuffNeededForRequestCerts) (event
 		Credentials: &endpoint.Authentication{
 			AccessToken: dataForRequestCert.AccessToken},
 	}
-	fmt.Printf("TPP URL: %s", config.BaseUrl)
 
-	//config := cloudConfig
-	//config := mockConfig
 	c, err := vcert.NewClient(config)
 	if err != nil {
-		fmt.Printf("Failed to connect to endpoint: %v ", err)
-		return events.APIGatewayProxyResponse{ // Error HTTP response
+		fmt.Printf("Failed to connect to endpoint: %v ", err) // TODO: use logger
+		return events.APIGatewayProxyResponse{                // Error HTTP response
 			Body:       err.Error(),
 			StatusCode: 500,
 		}, nil
 	}
 
-	//
-	// 1.1. Compose request object
-	//
-	//Not all Venafi Cloud providers support IPAddress and EmailAddresses extensions.
 	var enrollReq = &certificate.Request{}
 
 	enrollReq = &certificate.Request{
@@ -97,11 +108,12 @@ func RequestCert(ctx context.Context, request StuffNeededForRequestCerts) (event
 	// fmt.Printf("Successfully submitted certificate request. Will pickup certificate by ID: %s", requestID)
 	// body, err := json.Marshal(requestID)
 	return events.APIGatewayProxyResponse{ // Success HTTP response
-		Body:       requestID,
+		Body:       fmt.Sprintf("{'data': [[0, '%v']]}", requestID),
 		StatusCode: 200,
 	}, nil
 }
 
 func main() {
+	// lambda.Start(GetCertificate)
 	lambda.Start(RequestCert)
 }

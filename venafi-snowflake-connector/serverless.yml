@@ -11,7 +11,6 @@
 #
 # Happy Coding!
 
-service: lambda-go
 # app and org for use with dashboard.serverless.com
 #app: your-app-name
 #org: your-org-name
@@ -20,44 +19,29 @@ service: lambda-go
 # Check out our docs for more details
 # frameworkVersion: "=X.X.X"
 
-# plugins:
-#   - serverless-snowflake-external-function-plugin
-
-package:
-  include:
-  - bin/**
 
 
-provider:
-  name: aws
-  runtime: go1.x
 
-# you can overwrite defaults here
-#  stage: dev
-  region: eu-west-1
+service: venafi-snowflake-connector
+plugins:
+  - serverless-snowflake-external-function-plugin
 
-
-# custom:
-#   snowflake:
-#     role: VENAFI_DEV
-#     account: starschema
-#     username: rakosif
-#     password: Okt1212939!
-#     warehouse: LOAD_WH
-#     database: TEST_DB
-#     schema: PUBLIC
-
+#  Every function that should be available as external function in snowflake needs
+#  at least argument_signature and data_type information
 functions:
-  # getCert:
-  #   handler: bin/handlers/get-cert
-  #   package:
-  #    include:
-  #      - ./bin/handlers/get-cert
-  #   events:
-  #     - http:
-  #         path: cert
-  #         method: get
-  #         cors: true
+  getCert:
+    handler: bin/handlers/getcert
+    package:
+      include:
+        - ./bin/**
+    events:
+      - http:
+          path: getcert
+          method: post
+          cors: true
+    snowflake:
+      argument_signature: (request variant)
+      data_type: variant
   # listCerts:
   #   handler: bin/handlers/list-certs
   #   package:
@@ -69,15 +53,19 @@ functions:
   #         method: get
   requestCert:
     handler: bin/handlers/requestcert
-    timeout: 65
+    timeout: 35
     package:
       include:
         - ./bin/**
     events:
       - http:
-          path: /
+          path: requestcert
           method: post
-          cors: true
+          authorizer: aws_iam
+    snowflake:
+      argument_signature: (request variant)
+      data_type: variant
+
   # getCertStatus:
   #   handler: bin/handlers/get-cert-status
   #   package:
@@ -108,3 +96,37 @@ functions:
   #         path: cert/revoke
   #         method: delete
   #         cors: true
+
+custom:
+  snowflake:
+    role: VENAFI_DEV
+    account: starschema
+    username: rakosif
+    password: Okt1212939!
+    warehouse: LOAD_WH
+    database: TEST_DB
+    schema: PUBLIC
+
+package:
+  include:
+  - bin/**
+
+
+provider:
+  name: aws
+  runtime: go1.x
+
+# you can overwrite defaults here
+#  stage: dev
+  region: eu-west-1
+
+
+# custom:
+#   snowflake:
+#     role: VENAFI_DEV
+#     account: starschema
+#     username: rakosif
+#     password: Okt1212939!
+#     warehouse: LOAD_WH
+#     database: TEST_DB
+#     schema: PUBLIC
