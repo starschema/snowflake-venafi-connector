@@ -110,14 +110,3 @@ provider:
 # you can overwrite defaults here
 #  stage: dev
   region: eu-west-1
-
-
-# custom:
-#   snowflake:
-#     role: VENAFI_DEV
-#     account: starschema
-#     username: rakosif
-#     password: Okt1212939!
-#     warehouse: LOAD_WH
-#     database: TEST_DB
-#     schema: PUBLIC
