@@ -20,7 +20,7 @@ type VenafiConnectorConfig struct {
 	Zone        string `json:"zone,omitempty"`
 	UPN         string `json:"upn,omitempty"`
 	DNSName     string `json:"dnsName,omitempty"`
-	CommonName  string `json:"	,omitempty"`
+	CommonName  string `json:"commonName,omitempty"`
 }
 
 type SnowFlakeType struct {
