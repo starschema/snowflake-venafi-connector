@@ -11,6 +11,7 @@ import (
 	"github.com/Venafi/vcert/v4/pkg/endpoint"
 	"github.com/aws/aws-lambda-go/events"
 	"github.com/aws/aws-lambda-go/lambda"
+	log "github.com/palette-software/go-log-targets"
 )
 
 type VenafiConnectorConfig struct {
@@ -32,7 +33,7 @@ func RequestCert(ctx context.Context, request events.APIGatewayProxyRequest) (ev
 	var snowflakeData SnowFlakeType
 	err := json.Unmarshal([]byte(request.Body), &snowflakeData)
 	if err != nil {
-		fmt.Printf("Failed to unmarshal snowflake value: %v ", err)
+		log.Errorf("Failed to unmarshal snowflake parameters: %s", err)
 		return events.APIGatewayProxyResponse{ // Error HTTP response
 			Body:       err.Error(),
 			StatusCode: 500,
@@ -56,8 +57,8 @@ func RequestCert(ctx context.Context, request events.APIGatewayProxyRequest) (ev
 
 	c, err := vcert.NewClient(config)
 	if err != nil {
-		fmt.Printf("Failed to connect to endpoint: %v ", err) // TODO: use logger
-		return events.APIGatewayProxyResponse{                // Error HTTP response
+		log.Errorf("Failed to connect to endpoint: %s", err)
+		return events.APIGatewayProxyResponse{
 			Body:       err.Error(),
 			StatusCode: 500,
 		}, nil
@@ -87,7 +88,7 @@ func RequestCert(ctx context.Context, request events.APIGatewayProxyRequest) (ev
 	//
 	err = c.GenerateRequest(nil, enrollReq)
 	if err != nil {
-		fmt.Printf("Failed to generate request: %v ", err)
+		log.Errorf("Failed to generate request: %v ", err)
 		return events.APIGatewayProxyResponse{ // Error HTTP response
 			Body:       err.Error(),
 			StatusCode: 500,
@@ -99,14 +100,13 @@ func RequestCert(ctx context.Context, request events.APIGatewayProxyRequest) (ev
 	//
 	requestID, err := c.RequestCertificate(enrollReq)
 	if err != nil {
-		fmt.Printf("Failed to request certificate: %v ", err)
+		log.Errorf("Failed to request certificate:: %v ", err)
 		return events.APIGatewayProxyResponse{ // Error HTTP response
 			Body:       err.Error(),
 			StatusCode: 500,
 		}, nil
 	}
-	// fmt.Printf("Successfully submitted certificate request. Will pickup certificate by ID: %s", requestID)
-	// body, err := json.Marshal(requestID)
+	log.Infof("Certificate request was successful. RequestID is: %s", requestID)
 	return events.APIGatewayProxyResponse{ // Success HTTP response
 		Body:       fmt.Sprintf("{'data': [[0, '%v']]}", requestID),
 		StatusCode: 200,
@@ -114,6 +114,5 @@ func RequestCert(ctx context.Context, request events.APIGatewayProxyRequest) (ev
 }
 
 func main() {
-	// lambda.Start(GetCertificate)
 	lambda.Start(RequestCert)
 }
