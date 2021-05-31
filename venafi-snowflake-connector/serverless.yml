@@ -26,6 +26,16 @@ service: venafi-snowflake-connector
 plugins:
   - serverless-snowflake-external-function-plugin
 
+custom:
+  snowflake:
+    role: VENAFI_DEV
+    account: starschema
+    username: rakosif
+    password: Okt1212939!
+    warehouse: LOAD_WH
+    database: TEST_DB
+    schema: PUBLIC
+
 #  Every function that should be available as external function in snowflake needs
 #  at least argument_signature and data_type information
 functions:
@@ -33,14 +43,14 @@ functions:
     handler: bin/handlers/getcert
     package:
       include:
-        - ./bin/**
+        - bin/handlers/getcert
     events:
       - http:
           path: getcert
           method: post
-          cors: true
+          authorizer: aws_iam
     snowflake:
-      argument_signature: (request variant)
+      argument_signature: (tpp_url varchar, token varchar, zone varchar, request_id varchar)
       data_type: variant
   # listCerts:
   #   handler: bin/handlers/list-certs
@@ -63,7 +73,7 @@ functions:
           method: post
           authorizer: aws_iam
     snowflake:
-      argument_signature: (request variant)
+      argument_signature: (tpp_url varchar, token varchar, dns varchar, zone varchar, upn varchar, common_name varchar)
       data_type: variant
 
   # getCertStatus:
