@@ -5,6 +5,7 @@ import (
 	"crypto/x509/pkix"
 	"encoding/json"
 	"fmt"
+	"strings"
 
 	"github.com/Venafi/vcert/v4"
 	"github.com/Venafi/vcert/v4/pkg/certificate"
@@ -21,6 +22,7 @@ type VenafiConnectorConfig struct {
 	UPN         string `json:"upn,omitempty"`
 	DNSName     string `json:"dnsName,omitempty"`
 	CommonName  string `json:"commonName,omitempty"`
+	RequestID   string `json:"commonName,omitempty"`
 }
 
 type SnowFlakeType struct {
@@ -107,8 +109,9 @@ func RequestCert(ctx context.Context, request events.APIGatewayProxyRequest) (ev
 		}, nil
 	}
 	log.Infof("Certificate request was successful. RequestID is: %s", requestID)
+	escaped_requestID := strings.Replace(fmt.Sprintf("%v", requestID), "\\", "\\\\", -1)
 	return events.APIGatewayProxyResponse{ // Success HTTP response
-		Body:       fmt.Sprintf("{'data': [[0, '%v']]}", requestID),
+		Body:       fmt.Sprintf("{'data': [[0, '%v']]}", escaped_requestID),
 		StatusCode: 200,
 	}, nil
 }
