@@ -13,26 +13,13 @@ import (
 	"github.com/aws/aws-lambda-go/events"
 	"github.com/aws/aws-lambda-go/lambda"
 	log "github.com/palette-software/go-log-targets"
+	"github.com/starschema/snowflake-venafi-connector/lambda/utils"
 )
-
-type VenafiConnectorConfig struct {
-	AccessToken string `json:"token,omitempty"`
-	TppURL      string `json:"tppUrl,omitempty"`
-	Zone        string `json:"zone,omitempty"`
-	UPN         string `json:"upn,omitempty"`
-	DNSName     string `json:"dnsName,omitempty"`
-	CommonName  string `json:"commonName,omitempty"`
-	RequestID   string `json:"commonName,omitempty"`
-}
-
-type SnowFlakeType struct {
-	Data [][]interface{} `json:"data,omitempty"`
-}
 
 func RequestCert(ctx context.Context, request events.APIGatewayProxyRequest) (events.APIGatewayProxyResponse, error) {
 
-	var dataForRequestCert VenafiConnectorConfig
-	var snowflakeData SnowFlakeType
+	var dataForRequestCert utils.VenafiConnectorConfig
+	var snowflakeData utils.SnowFlakeType
 	err := json.Unmarshal([]byte(request.Body), &snowflakeData)
 	if err != nil {
 		log.Errorf("Failed to unmarshal snowflake parameters: %s", err)
