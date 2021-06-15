@@ -22,14 +22,14 @@ type VenafiConnectorConfig struct {
 	UPN         string `json:"upn,omitempty"`
 	DNSName     string `json:"dnsName,omitempty"`
 	CommonName  string `json:"commonName,omitempty"`
-	RequestID   string `json:"commonName,omitempty"`
+	RequestID   string `json:"requestID,omitempty"`
 }
 
 type SnowFlakeType struct {
 	Data [][]interface{} `json:"data,omitempty"`
 }
 
-func RequestCert(ctx context.Context, request events.APIGatewayProxyRequest) (events.APIGatewayProxyResponse, error) {
+func RequestCert(ctx context.Context, request events.APIGatewayProxyRequest) events.APIGatewayProxyResponse {
 
 	var dataForRequestCert VenafiConnectorConfig
 	var snowflakeData SnowFlakeType
@@ -39,7 +39,7 @@ func RequestCert(ctx context.Context, request events.APIGatewayProxyRequest) (ev
 		return events.APIGatewayProxyResponse{ // Error HTTP response
 			Body:       err.Error(),
 			StatusCode: 500,
-		}, nil
+		}
 	}
 
 	dataForRequestCert.TppURL = fmt.Sprintf("%v", snowflakeData.Data[0][1])
@@ -63,57 +63,42 @@ func RequestCert(ctx context.Context, request events.APIGatewayProxyRequest) (ev
 		return events.APIGatewayProxyResponse{
 			Body:       err.Error(),
 			StatusCode: 500,
-		}, nil
+		}
 	}
 
 	var enrollReq = &certificate.Request{}
 
 	enrollReq = &certificate.Request{
 		Subject: pkix.Name{
-			CommonName:         dataForRequestCert.CommonName,
-			Organization:       []string{"Starschema"},
-			OrganizationalUnit: []string{"Team Software Dev"},
-			Locality:           []string{"Salt Lake"},
-			Province:           []string{"Salt Lake"},
-			Country:            []string{"US"},
+			CommonName: dataForRequestCert.CommonName,
 		},
-		UPNs:        []string{dataForRequestCert.UPN},
-		DNSNames:    []string{dataForRequestCert.DNSName},
-		CsrOrigin:   certificate.LocalGeneratedCSR,
-		KeyType:     certificate.KeyTypeRSA,
-		KeyLength:   2048,
-		ChainOption: certificate.ChainOptionRootLast,
-		KeyPassword: "newPassw0rd!",
+		UPNs:     []string{dataForRequestCert.UPN},
+		DNSNames: []string{dataForRequestCert.DNSName},
 	}
-	//
-	// 1.2. Generate private key and certificate request (CSR) based on request's options
-	//
+
 	err = c.GenerateRequest(nil, enrollReq)
 	if err != nil {
 		log.Errorf("Failed to generate request: %v ", err)
 		return events.APIGatewayProxyResponse{ // Error HTTP response
 			Body:       err.Error(),
 			StatusCode: 500,
-		}, nil
+		}
 	}
 
-	//
-	// 1.3. Submit certificate request, get request ID as a response
-	//
 	requestID, err := c.RequestCertificate(enrollReq)
 	if err != nil {
 		log.Errorf("Failed to request certificate:: %v ", err)
 		return events.APIGatewayProxyResponse{ // Error HTTP response
 			Body:       err.Error(),
 			StatusCode: 500,
-		}, nil
+		}
 	}
 	log.Infof("Certificate request was successful. RequestID is: %s", requestID)
 	escaped_requestID := strings.Replace(fmt.Sprintf("%v", requestID), "\\", "\\\\", -1)
 	return events.APIGatewayProxyResponse{ // Success HTTP response
 		Body:       fmt.Sprintf("{'data': [[0, '%v']]}", escaped_requestID),
 		StatusCode: 200,
-	}, nil
+	}
 }
 
 func main() {
