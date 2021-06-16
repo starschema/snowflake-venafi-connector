@@ -13,6 +13,7 @@ import (
 	"github.com/aws/aws-lambda-go/events"
 	"github.com/aws/aws-lambda-go/lambda"
 	log "github.com/palette-software/go-log-targets"
+	"github.com/starschema/snowflake-venafi-connector/lambda/utils"
 )
 
 type VenafiConnectorConfig struct {
@@ -43,18 +44,26 @@ func RequestCert(ctx context.Context, request events.APIGatewayProxyRequest) eve
 	}
 
 	dataForRequestCert.TppURL = fmt.Sprintf("%v", snowflakeData.Data[0][1])
-	dataForRequestCert.AccessToken = fmt.Sprintf("%v", snowflakeData.Data[0][2])
-	dataForRequestCert.DNSName = fmt.Sprintf("%v", snowflakeData.Data[0][3]) // TODO: UPN, DNS should allow multiple values
-	dataForRequestCert.Zone = fmt.Sprintf("%v", snowflakeData.Data[0][4])
-	dataForRequestCert.UPN = fmt.Sprintf("%v", snowflakeData.Data[0][5])
-	dataForRequestCert.CommonName = fmt.Sprintf("%v", snowflakeData.Data[0][6])
+	dataForRequestCert.DNSName = fmt.Sprintf("%v", snowflakeData.Data[0][2]) // TODO: UPN, DNS should allow multiple values
+	dataForRequestCert.Zone = fmt.Sprintf("%v", snowflakeData.Data[0][3])
+	dataForRequestCert.UPN = fmt.Sprintf("%v", snowflakeData.Data[0][4])
+	dataForRequestCert.CommonName = fmt.Sprintf("%v", snowflakeData.Data[0][5])
+
+	accessToken, err := utils.GetAccessToken(dataForRequestCert.TppURL)
+	if err != nil {
+		fmt.Printf("Failed to get access token: %s", err)
+		return events.APIGatewayProxyResponse{ // Error HTTP response
+			Body:       err.Error(),
+			StatusCode: 500,
+		}
+	}
 
 	config := &vcert.Config{
 		ConnectorType: endpoint.ConnectorTypeTPP,
 		BaseUrl:       dataForRequestCert.TppURL,
 		Zone:          dataForRequestCert.Zone,
 		Credentials: &endpoint.Authentication{
-			AccessToken: dataForRequestCert.AccessToken},
+			AccessToken: accessToken},
 	}
 
 	c, err := vcert.NewClient(config)
