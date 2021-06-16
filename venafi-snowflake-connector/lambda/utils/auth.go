@@ -58,7 +58,10 @@ func GetAccessToken(tpp_url string) (string, error) {
 		return "", fmt.Errorf("Failed to get access token: %v", err.Error())
 	}
 
-	credentialArray := parseCredentialData(credentials)
+	credentialArray, err := parseCredentialData(credentials)
+	if err != nil {
+		return "", fmt.Errorf("Failed to parse token %v", err.Error())
+	}
 	var access_token string
 	for _, x := range credentialArray {
 		if x["url"] == tpp_url {
@@ -120,13 +123,13 @@ func GetNewAccessToken(single_credential_for_tpp map[string]string) *map[string]
 	return &single_credential_for_tpp
 }
 
-func parseCredentialData(credentialsData []byte) credentialJSON {
+func parseCredentialData(credentialsData []byte) (credentialJSON, error) {
 	var data credentialJSON
 	err := json.Unmarshal(credentialsData, &data)
 	if err != nil {
-		log.Fatal(err)
+		log.Errorf("Failed to unmarshal credentials: %v".err.Error())
 	}
-	return data
+	return data, nil
 }
 
 func getCredentials(filename, bucket, zone string) ([]byte, error) {
