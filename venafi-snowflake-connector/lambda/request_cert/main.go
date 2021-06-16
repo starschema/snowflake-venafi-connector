@@ -30,7 +30,7 @@ type SnowFlakeType struct {
 	Data [][]interface{} `json:"data,omitempty"`
 }
 
-func RequestCert(ctx context.Context, request events.APIGatewayProxyRequest) events.APIGatewayProxyResponse {
+func RequestCert(ctx context.Context, request events.APIGatewayProxyRequest) (events.APIGatewayProxyResponse, error) {
 
 	var dataForRequestCert VenafiConnectorConfig
 	var snowflakeData SnowFlakeType
@@ -40,7 +40,7 @@ func RequestCert(ctx context.Context, request events.APIGatewayProxyRequest) eve
 		return events.APIGatewayProxyResponse{ // Error HTTP response
 			Body:       err.Error(),
 			StatusCode: 500,
-		}
+		}, nil
 	}
 
 	dataForRequestCert.TppURL = fmt.Sprintf("%v", snowflakeData.Data[0][1])
@@ -51,11 +51,11 @@ func RequestCert(ctx context.Context, request events.APIGatewayProxyRequest) eve
 
 	accessToken, err := utils.GetAccessToken(dataForRequestCert.TppURL)
 	if err != nil {
-		fmt.Printf("Failed to get access token: %s", err)
+		log.Errorf("Failed to get accesss token: %s", err)
 		return events.APIGatewayProxyResponse{ // Error HTTP response
 			Body:       err.Error(),
 			StatusCode: 500,
-		}
+		}, nil
 	}
 
 	config := &vcert.Config{
@@ -72,7 +72,7 @@ func RequestCert(ctx context.Context, request events.APIGatewayProxyRequest) eve
 		return events.APIGatewayProxyResponse{
 			Body:       err.Error(),
 			StatusCode: 500,
-		}
+		}, nil
 	}
 
 	var enrollReq = &certificate.Request{}
@@ -91,7 +91,7 @@ func RequestCert(ctx context.Context, request events.APIGatewayProxyRequest) eve
 		return events.APIGatewayProxyResponse{ // Error HTTP response
 			Body:       err.Error(),
 			StatusCode: 500,
-		}
+		}, nil
 	}
 
 	requestID, err := c.RequestCertificate(enrollReq)
@@ -100,14 +100,14 @@ func RequestCert(ctx context.Context, request events.APIGatewayProxyRequest) eve
 		return events.APIGatewayProxyResponse{ // Error HTTP response
 			Body:       err.Error(),
 			StatusCode: 500,
-		}
+		}, nil
 	}
 	log.Infof("Certificate request was successful. RequestID is: %s", requestID)
 	escaped_requestID := strings.Replace(fmt.Sprintf("%v", requestID), "\\", "\\\\", -1)
 	return events.APIGatewayProxyResponse{ // Success HTTP response
 		Body:       fmt.Sprintf("{'data': [[0, '%v']]}", escaped_requestID),
 		StatusCode: 200,
-	}
+	}, nil
 }
 
 func main() {

@@ -63,7 +63,7 @@ functions:
           method: post
           authorizer: aws_iam
     snowflake:
-      argument_signature: (tpp_url varchar, token varchar, dns varchar, zone varchar, upn varchar, common_name varchar)
+      argument_signature: (tpp_url varchar, dns varchar, zone varchar, upn varchar, common_name varchar)
       data_type: variant
 
   # getCertStatus:
