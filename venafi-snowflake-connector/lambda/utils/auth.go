@@ -127,7 +127,7 @@ func parseCredentialData(credentialsData []byte) (credentialJSON, error) {
 	var data credentialJSON
 	err := json.Unmarshal(credentialsData, &data)
 	if err != nil {
-		log.Errorf("Failed to unmarshal credentials: %v".err.Error())
+		log.Errorf("Failed to unmarshal credentials: %v", err.Error())
 	}
 	return data, nil
 }
