@@ -40,7 +40,7 @@ functions:
           method: post
           authorizer: aws_iam
     snowflake:
-      argument_signature: (tpp_url varchar, token varchar, zone varchar, request_id varchar)
+      argument_signature: (tpp_url varchar, zone varchar, request_id varchar)
       data_type: variant
   # listCerts:
   #   handler: bin/handlers/list-certs
@@ -56,14 +56,14 @@ functions:
     timeout: 35
     package:
       include:
-        - ./bin/**
+        - ./bin/handlers/requestcert
     events:
       - http:
           path: requestcert
           method: post
           authorizer: aws_iam
     snowflake:
-      argument_signature: (tpp_url varchar, token varchar, dns varchar, zone varchar, upn varchar, common_name varchar)
+      argument_signature: (tpp_url varchar, dns varchar, zone varchar, upn varchar, common_name varchar)
       data_type: variant
 
   # getCertStatus:

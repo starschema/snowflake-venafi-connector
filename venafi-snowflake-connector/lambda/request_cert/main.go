@@ -5,6 +5,7 @@ import (
 	"crypto/x509/pkix"
 	"encoding/json"
 	"fmt"
+	"os"
 	"strings"
 
 	"github.com/Venafi/vcert/v4"
@@ -18,6 +19,8 @@ import (
 
 func RequestCert(ctx context.Context, request events.APIGatewayProxyRequest) (events.APIGatewayProxyResponse, error) {
 
+	log.AddTarget(os.Stdout, log.LevelDebug)
+
 	var dataForRequestCert utils.VenafiConnectorConfig
 	var snowflakeData utils.SnowFlakeType
 	err := json.Unmarshal([]byte(request.Body), &snowflakeData)
@@ -29,21 +32,35 @@ func RequestCert(ctx context.Context, request events.APIGatewayProxyRequest) (ev
 		}, nil
 	}
 
+	// Parse parameters sent by Snowflake from Lambda Event
 	dataForRequestCert.TppURL = fmt.Sprintf("%v", snowflakeData.Data[0][1])
-	dataForRequestCert.AccessToken = fmt.Sprintf("%v", snowflakeData.Data[0][2])
-	dataForRequestCert.DNSName = fmt.Sprintf("%v", snowflakeData.Data[0][3]) // TODO: UPN, DNS should allow multiple values
-	dataForRequestCert.Zone = fmt.Sprintf("%v", snowflakeData.Data[0][4])
-	dataForRequestCert.UPN = fmt.Sprintf("%v", snowflakeData.Data[0][5])
-	dataForRequestCert.CommonName = fmt.Sprintf("%v", snowflakeData.Data[0][6])
+	dataForRequestCert.DNSName = fmt.Sprintf("%v", snowflakeData.Data[0][2]) // TODO: UPN, DNS should allow multiple values
+	dataForRequestCert.Zone = fmt.Sprintf("%v", snowflakeData.Data[0][3])
+	dataForRequestCert.UPN = fmt.Sprintf("%v", snowflakeData.Data[0][4])
+	dataForRequestCert.CommonName = fmt.Sprintf("%v", snowflakeData.Data[0][5])
+
+	log.Infof("Finished parse parameters from event object")
+
+	// Get access token from S3. If access token is expired, generate a new one.
+	accessToken, err := utils.GetAccessToken(dataForRequestCert.TppURL)
+	if err != nil {
+		log.Errorf("Failed to get accesss token: %s", err)
+		return events.APIGatewayProxyResponse{ // Error HTTP response
+			Body:       err.Error(),
+			StatusCode: 500,
+		}, nil
+	}
+
+	log.Info("Got valid access token from S3")
 
 	config := &vcert.Config{
 		ConnectorType: endpoint.ConnectorTypeTPP,
 		BaseUrl:       dataForRequestCert.TppURL,
 		Zone:          dataForRequestCert.Zone,
 		Credentials: &endpoint.Authentication{
-			AccessToken: dataForRequestCert.AccessToken},
+			AccessToken: accessToken},
 	}
-
+	// Create a new Connector for Venafi API calls
 	c, err := vcert.NewClient(config)
 	if err != nil {
 		log.Errorf("Failed to connect to endpoint: %s", err)
@@ -57,24 +74,11 @@ func RequestCert(ctx context.Context, request events.APIGatewayProxyRequest) (ev
 
 	enrollReq = &certificate.Request{
 		Subject: pkix.Name{
-			CommonName:         dataForRequestCert.CommonName,
-			Organization:       []string{"Starschema"},
-			OrganizationalUnit: []string{"Team Software Dev"},
-			Locality:           []string{"Salt Lake"},
-			Province:           []string{"Salt Lake"},
-			Country:            []string{"US"},
+			CommonName: dataForRequestCert.CommonName,
 		},
-		UPNs:        []string{dataForRequestCert.UPN},
-		DNSNames:    []string{dataForRequestCert.DNSName},
-		CsrOrigin:   certificate.LocalGeneratedCSR,
-		KeyType:     certificate.KeyTypeRSA,
-		KeyLength:   2048,
-		ChainOption: certificate.ChainOptionRootLast,
-		KeyPassword: "newPassw0rd!",
+		UPNs:     []string{dataForRequestCert.UPN},
+		DNSNames: []string{dataForRequestCert.DNSName},
 	}
-	//
-	// 1.2. Generate private key and certificate request (CSR) based on request's options
-	//
 	err = c.GenerateRequest(nil, enrollReq)
 	if err != nil {
 		log.Errorf("Failed to generate request: %v ", err)
@@ -84,9 +88,8 @@ func RequestCert(ctx context.Context, request events.APIGatewayProxyRequest) (ev
 		}, nil
 	}
 
-	//
-	// 1.3. Submit certificate request, get request ID as a response
-	//
+	log.Info("Generate request was successful")
+	// Request a new certificate using Venafi API
 	requestID, err := c.RequestCertificate(enrollReq)
 	if err != nil {
 		log.Errorf("Failed to request certificate:: %v ", err)
@@ -96,7 +99,9 @@ func RequestCert(ctx context.Context, request events.APIGatewayProxyRequest) (ev
 		}, nil
 	}
 	log.Infof("Certificate request was successful. RequestID is: %s", requestID)
+
 	escaped_requestID := strings.Replace(fmt.Sprintf("%v", requestID), "\\", "\\\\", -1)
+	// Transform data to a form which is readable by Snowflake
 	return events.APIGatewayProxyResponse{ // Success HTTP response
 		Body:       fmt.Sprintf("{'data': [[0, '%v']]}", escaped_requestID),
 		StatusCode: 200,

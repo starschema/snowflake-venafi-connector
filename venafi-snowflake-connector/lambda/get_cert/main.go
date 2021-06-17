@@ -4,7 +4,7 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
-	"regexp"
+	"os"
 	"strings"
 	"time"
 
@@ -19,6 +19,9 @@ import (
 )
 
 func GetCert(ctx context.Context, request events.APIGatewayProxyRequest) (events.APIGatewayProxyResponse, error) {
+
+	log.AddTarget(os.Stdout, log.LevelDebug)
+
 	var dataForRequestCert utils.VenafiConnectorConfig
 	var snowflakeData utils.SnowFlakeType
 	err := json.Unmarshal([]byte(request.Body), &snowflakeData)
@@ -44,7 +47,7 @@ func GetCert(ctx context.Context, request events.APIGatewayProxyRequest) (events
 
 	c, err := vcert.NewClient(config)
 	if err != nil {
-		fmt.Printf("Failed to connect to endpoint: %s", err)
+		log.Errorf("Failed to connect to endpoint: %s", err)
 		return events.APIGatewayProxyResponse{
 			Body:       fmt.Sprintf("{'data': [[0, '%v']]}", err.Error()),
 			StatusCode: 500,
@@ -58,19 +61,25 @@ func GetCert(ctx context.Context, request events.APIGatewayProxyRequest) (events
 
 	pcc, err := c.RetrieveCertificate(pickupReq)
 	if err != nil {
-		fmt.Printf("Could not get certificate: %s", err)
+		log.Errorf("Could not get certificate: %s", err)
 		return events.APIGatewayProxyResponse{
 			Body:       fmt.Sprintf("{'data': [[0, '%v']]}", err.Error()),
 			StatusCode: 500,
 		}, nil
 	}
 
-	var regexp_to_remove_whitespace = regexp.MustCompile("\\s")
-	escaped_cert := regexp_to_remove_whitespace.ReplaceAllString(fmt.Sprintf("%v", pcc), "\\n")
+	bytes, err := json.Marshal(pcc)
+	if err != nil {
+		log.Errorf("Failed to serialize certificate: %v", err)
+		return events.APIGatewayProxyResponse{
+			Body:       fmt.Sprintf("{'data': [[0, '%v']]}", err.Error()),
+			StatusCode: 500,
+		}, nil
+	}
 
-	fmt.Printf("Retrieving certificate was succesfull: %s", escaped_cert)
+	log.Infof("Retrieving certificate was succesful")
 	return events.APIGatewayProxyResponse{ // Success HTTP response
-		Body:       fmt.Sprintf("{'data': [[0, '%v']]}", escaped_cert),
+		Body:       fmt.Sprintf("{'data': [[0, '%v']]}", string(bytes)),
 		StatusCode: 200,
 	}, nil
 }
