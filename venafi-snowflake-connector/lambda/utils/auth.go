@@ -83,6 +83,7 @@ func GetAccessToken(tpp_url string) (string, error) {
 					return "", fmt.Errorf("Failed to refresh and get new credentials from S3")
 				}
 			}
+			break
 		}
 	}
 	return access_token, nil
@@ -94,23 +95,13 @@ func CheckIfAccessTokenIsValid(acces_token_expiration time.Time) bool {
 
 func GetNewAccessToken(single_credential_for_tpp map[string]string) *map[string]string {
 
-	auth := endpoint.Authentication{
-		User:     single_credential_for_tpp["user"],
-		Password: single_credential_for_tpp["password"],
-	}
-
 	c, err := tpp.NewConnector(single_credential_for_tpp["url"], "", false, nil)
 	if err != nil {
 		log.Errorf("Failed to create TPP Connector: %v", err.Error())
 		return nil
 	}
 
-	resp, err := c.GetRefreshToken(&auth)
-	if err != nil {
-		log.Errorf("Failed to get refresh token: %v", err.Error())
-		return nil
-	}
-	auth.RefreshToken = resp.Refresh_token
+	auth := endpoint.Authentication{RefreshToken: single_credential_for_tpp["refresh_token"]}
 
 	new_creds, err := c.RefreshAccessToken(&auth)
 	if err != nil {
