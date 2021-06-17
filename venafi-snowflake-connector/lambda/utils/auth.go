@@ -105,7 +105,7 @@ func GetNewAccessToken(single_credential_for_tpp map[string]string) *map[string]
 
 	new_creds, err := c.RefreshAccessToken(&auth)
 	if err != nil {
-		fmt.Printf("err: %v", err.Error())
+		log.Errorf("err: %v", err.Error())
 		return nil
 	}
 	single_credential_for_tpp["access_token"] = new_creds.Access_token
@@ -138,9 +138,9 @@ func getCredentials(filename, bucket, zone string) ([]byte, error) {
 		Key:    aws.String(filename),
 	})
 	if err != nil {
-		fmt.Printf("Failed to get credentials: %v", err)
+		log.Errorf("Failed to get credentials: %v", err)
 		return []byte{}, fmt.Errorf("failed to get credentials, %v", err)
 	}
-	fmt.Printf("file downloaded, %d bytes\n", n)
+	log.Debugf("file downloaded, %d bytes\n", n)
 	return buff.Bytes(), nil
 }
