@@ -68,6 +68,7 @@ func RenewCertificate(ctx context.Context, request events.APIGatewayProxyRequest
 
 	requestID, err := c.RenewCertificate(renewReq)
 	if err != nil {
+		log.Errorf("Failed to renew certificate: %v", err)
 		return events.APIGatewayProxyResponse{
 			Body:       fmt.Sprintf("{'data': [[0, '%v']]}", err.Error()),
 			StatusCode: 500,

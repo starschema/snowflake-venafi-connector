@@ -40,7 +40,7 @@ functions:
           method: post
           authorizer: aws_iam
     snowflake:
-      argument_signature: (tpp_url varchar, zone varchar, request_id varchar)
+      argument_signature: (tpp_url varchar, request_id varchar)
       data_type: variant
   # listCerts:
   #   handler: bin/handlers/list-certs
@@ -65,37 +65,45 @@ functions:
     snowflake:
       argument_signature: (tpp_url varchar, dns varchar, zone varchar, upn varchar, common_name varchar)
       data_type: variant
-
   # getCertStatus:
-  #   handler: bin/handlers/get-cert-status
+  #   handler: bin/handlers/getcertstatus
   #   package:
   #     include:
-  #       - ./bin/handlers/get-cert-status
+  #       - ./bin/handlers/getcertstatus
   #   events:
   #     - http:
-  #         path: cert/request
-  #         method: get
-  #         cors: true
-  # renewCert:
-  #     handler: bin/handlers/renew-cert
-  #     package:
-  #       include:
-  #         - ./bin/handlers/renew-cert
-  #     events:
-  #       - http:
-  #           path: cert/renew
-  #           method: patch
-  #           cors: true
-  # revokeCert:
-  #   handler: bin/handlers/revoke-cert
-  #   package:
-  #     include:
-  #       - ./bin/handlers/revoke-cert
-  #   events:
-  #     - http:
-  #         path: cert/revoke
-  #         method: delete
-  #         cors: true
+  #         path: getcertstatus
+  #         method: post
+  #         authorizer: aws_iam
+  #   snowflake:
+  #     argument_signature: (tpp_url varchar, token varchar, request_id varchar)
+  #     data_type: variant
+  renewCert:
+      handler: bin/handlers/renewcert
+      package:
+        include:
+          - ./bin/handlers/renewcert
+      events:
+        - http:
+            path: renewcert
+            method: post
+            authorizer: aws_iam
+      snowflake:
+        argument_signature: (tpp_url varchar, request_id varchar)
+        data_type: variant
+  revokeCert:
+    handler: bin/handlers/revokecert
+    package:
+      include:
+        - ./bin/handlers/revokecert
+    events:
+      - http:
+          path: revokecert
+          method: post
+          authorizer: aws_iam
+    snowflake:
+      argument_signature: (tpp_url varchar, request_id varchar, should_disable varchar)
+      data_type: variant
 
 
 package:
