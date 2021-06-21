@@ -63,15 +63,15 @@ func GetAccessToken(tpp_url string) (string, error) {
 		return "", fmt.Errorf("Failed to parse token %v", err.Error())
 	}
 	var access_token string
+	var found_token bool
 	for _, x := range credentialArray {
 		if x["url"] == tpp_url {
-			expiritation_time := x["access_token_expires"]
+			expiritation_time, found_exp := x["access_token_expires"]
+			access_token, found_token = x["access_token"]
 			layout := "2006-01-02T15:04:05.000Z"
 			t, _ := time.Parse(layout, expiritation_time)
-			if CheckIfAccessTokenIsValid(t) {
-				access_token = x["access_token"]
-				break
-			} else {
+
+			if !found_exp || !found_token || !CheckIfAccessTokenIsValid(t) {
 				new_credentials := GetNewAccessToken(x)
 				if new_credentials != nil {
 					access_token = (*new_credentials)["access_token"]
@@ -82,6 +82,9 @@ func GetAccessToken(tpp_url string) (string, error) {
 					log.Errorf("Failed to get new credentials")
 					return "", fmt.Errorf("Failed to refresh and get new credentials from S3")
 				}
+			} else {
+				log.Infof("Found token is valid, no need to return new token.")
+				break
 			}
 			break
 		}

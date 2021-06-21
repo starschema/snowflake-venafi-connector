@@ -29,15 +29,13 @@ func RequestCert(ctx context.Context, request events.APIGatewayProxyRequest) (ev
 		return events.APIGatewayProxyResponse{ // Error HTTP response
 			Body:       err.Error(),
 			StatusCode: 500,
-		}, nil
+		}, err
 	}
 
 	// Parse parameters sent by Snowflake from Lambda Event
-	dataForRequestCert.TppURL = fmt.Sprintf("%v", snowflakeData.Data[0][1])
 	dataForRequestCert.DNSName = fmt.Sprintf("%v", snowflakeData.Data[0][2]) // TODO: UPN, DNS should allow multiple values
-	dataForRequestCert.Zone = fmt.Sprintf("%v", snowflakeData.Data[0][3])
-	dataForRequestCert.UPN = fmt.Sprintf("%v", snowflakeData.Data[0][4])
-	dataForRequestCert.CommonName = fmt.Sprintf("%v", snowflakeData.Data[0][5])
+	dataForRequestCert.UPN = fmt.Sprintf("%v", snowflakeData.Data[0][3])
+	dataForRequestCert.CommonName = fmt.Sprintf("%v", snowflakeData.Data[0][4])
 
 	log.Infof("Finished parse parameters from event object")
 
@@ -48,7 +46,7 @@ func RequestCert(ctx context.Context, request events.APIGatewayProxyRequest) (ev
 		return events.APIGatewayProxyResponse{ // Error HTTP response
 			Body:       err.Error(),
 			StatusCode: 500,
-		}, nil
+		}, err
 	}
 
 	log.Info("Got valid access token from S3")
@@ -61,13 +59,13 @@ func RequestCert(ctx context.Context, request events.APIGatewayProxyRequest) (ev
 			AccessToken: accessToken},
 	}
 	// Create a new Connector for Venafi API calls
-	c, err := vcert.NewClient(config)
+	c, err := utils.CreateVenafiConnectorFromParameters(snowflakeData, accessToken)
 	if err != nil {
-		log.Errorf("Failed to connect to endpoint: %s", err)
+		log.Errorf("Failed to create venafi client %s", err)
 		return events.APIGatewayProxyResponse{
 			Body:       err.Error(),
 			StatusCode: 500,
-		}, nil
+		}, err
 	}
 
 	var enrollReq = &certificate.Request{}
@@ -85,7 +83,7 @@ func RequestCert(ctx context.Context, request events.APIGatewayProxyRequest) (ev
 		return events.APIGatewayProxyResponse{ // Error HTTP response
 			Body:       err.Error(),
 			StatusCode: 500,
-		}, nil
+		}, err
 	}
 
 	log.Info("Generate request was successful")
@@ -96,7 +94,7 @@ func RequestCert(ctx context.Context, request events.APIGatewayProxyRequest) (ev
 		return events.APIGatewayProxyResponse{ // Error HTTP response
 			Body:       err.Error(),
 			StatusCode: 500,
-		}, nil
+		}, err
 	}
 	log.Infof("Certificate request was successful. RequestID is: %s", requestID)
 
@@ -105,7 +103,7 @@ func RequestCert(ctx context.Context, request events.APIGatewayProxyRequest) (ev
 	return events.APIGatewayProxyResponse{ // Success HTTP response
 		Body:       fmt.Sprintf("{'data': [[0, '%v']]}", escaped_requestID),
 		StatusCode: 200,
-	}, nil
+	}, err
 }
 
 func main() {
