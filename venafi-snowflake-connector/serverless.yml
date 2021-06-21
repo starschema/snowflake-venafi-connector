@@ -42,15 +42,19 @@ functions:
     snowflake:
       argument_signature: (tpp_url varchar, request_id varchar)
       data_type: variant
-  # listCerts:
-  #   handler: bin/handlers/list-certs
-  #   package:
-  #     include:
-  #       - ./bin/handlers/list-certs
-  #   events:
-  #     - http:
-  #         path: certs
-  #         method: get
+  listCerts:
+    handler: bin/handlers/listcert
+    package:
+      include:
+        - ./bin/handlers/listcert
+    events:
+      - http:
+          path: listcert
+          method: post
+          authorizer: aws_iam
+    snowflake:
+          argument_signature: (tpp_url varchar, zone varchar)
+          data_type: variant
   requestCert:
     handler: bin/handlers/requestcert
     timeout: 35
