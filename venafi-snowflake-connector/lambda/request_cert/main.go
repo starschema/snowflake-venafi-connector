@@ -33,6 +33,7 @@ func RequestCert(ctx context.Context, request events.APIGatewayProxyRequest) (ev
 	}
 
 	// Parse parameters sent by Snowflake from Lambda Event
+	dataForRequestCert.TppURL = fmt.Sprintf("%v", snowflakeData.Data[0][1])
 	dataForRequestCert.DNSName = fmt.Sprintf("%v", snowflakeData.Data[0][2]) // TODO: UPN, DNS should allow multiple values
 	dataForRequestCert.UPN = fmt.Sprintf("%v", snowflakeData.Data[0][3])
 	dataForRequestCert.CommonName = fmt.Sprintf("%v", snowflakeData.Data[0][4])
