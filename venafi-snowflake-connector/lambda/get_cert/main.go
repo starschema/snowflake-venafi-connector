@@ -34,15 +34,24 @@ func GetCert(ctx context.Context, request events.APIGatewayProxyRequest) (events
 	}
 
 	dataForRequestCert.TppURL = fmt.Sprintf("%v", snowflakeData.Data[0][1])
-	dataForRequestCert.AccessToken = fmt.Sprintf("%v", snowflakeData.Data[0][2])
-	escaped_pickupID := strings.Replace(fmt.Sprintf("%v", snowflakeData.Data[0][3]), "\\", "\\\\", -1)
+	escaped_pickupID := strings.Replace(fmt.Sprintf("%v", snowflakeData.Data[0][2]), "\\", "\\\\", -1)
+
+	accessToken, err := utils.GetAccessToken(dataForRequestCert.TppURL)
+	if err != nil {
+		log.Errorf("Failed to get accesss token: %s", err)
+		return events.APIGatewayProxyResponse{ // Error HTTP response
+			Body:       err.Error(),
+			StatusCode: 500,
+		}, err
+	}
+
 	dataForRequestCert.RequestID = escaped_pickupID
 
 	config := &vcert.Config{
 		ConnectorType: endpoint.ConnectorTypeTPP,
 		BaseUrl:       dataForRequestCert.TppURL,
 		Credentials: &endpoint.Authentication{
-			AccessToken: dataForRequestCert.AccessToken},
+			AccessToken: accessToken},
 	}
 
 	c, err := vcert.NewClient(config)
