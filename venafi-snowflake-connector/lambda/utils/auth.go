@@ -63,10 +63,11 @@ func GetAccessToken(tpp_url string) (string, error) {
 		return "", fmt.Errorf("Failed to parse token %v", err.Error())
 	}
 	var access_token string
+	var found_token bool
 	for _, x := range credentialArray {
 		if x["url"] == tpp_url {
 			expiritation_time, found_exp := x["access_token_expires"]
-			token, found_token := x["access_token"]
+			access_token, found_token = x["access_token"]
 			layout := "2006-01-02T15:04:05.000Z"
 			t, _ := time.Parse(layout, expiritation_time)
 
