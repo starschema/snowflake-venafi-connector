@@ -1,0 +1,112 @@
+# Welcome to Serverless!
+#
+# This file is the main config file for your service.
+# It's very minimal at this point and uses default values.
+# You can always add more config options for more control.
+# We've included some commented out config examples here.
+# Just uncomment any of them to get that config option.
+#
+# For full config options, check the docs:
+#    docs.serverless.com
+#
+# Happy Coding!
+
+# app and org for use with dashboard.serverless.com
+#app: your-app-name
+#org: your-org-name
+
+# You can pin your service to only deploy with a specific Serverless version
+# Check out our docs for more details
+# frameworkVersion: "=X.X.X"
+
+
+
+
+service: venafi-snowflake-connector
+plugins:
+  - serverless-snowflake-external-function-plugin
+
+#  Every function that should be available as external function in snowflake needs
+#  at least argument_signature and data_type information
+functions:
+  getCert:
+    handler: bin/handlers/getcert
+    package:
+      include:
+        - ./bin/**
+    events:
+      - http:
+          path: getcert
+          method: post
+          cors: true
+    snowflake:
+      argument_signature: (request variant)
+      data_type: variant
+  # listCerts:
+  #   handler: bin/handlers/list-certs
+  #   package:
+  #     include:
+  #       - ./bin/handlers/list-certs
+  #   events:
+  #     - http:
+  #         path: certs
+  #         method: get
+  requestCert:
+    handler: bin/handlers/requestcert
+    timeout: 35
+    package:
+      include:
+        - ./bin/handlers/requestcert
+    events:
+      - http:
+          path: requestcert
+          method: post
+          authorizer: aws_iam
+    snowflake:
+      argument_signature: (tpp_url varchar, dns varchar, zone varchar, upn varchar, common_name varchar)
+      data_type: variant
+
+  # getCertStatus:
+  #   handler: bin/handlers/get-cert-status
+  #   package:
+  #     include:
+  #       - ./bin/handlers/get-cert-status
+  #   events:
+  #     - http:
+  #         path: cert/request
+  #         method: get
+  #         cors: true
+  # renewCert:
+  #     handler: bin/handlers/renew-cert
+  #     package:
+  #       include:
+  #         - ./bin/handlers/renew-cert
+  #     events:
+  #       - http:
+  #           path: cert/renew
+  #           method: patch
+  #           cors: true
+  # revokeCert:
+  #   handler: bin/handlers/revoke-cert
+  #   package:
+  #     include:
+  #       - ./bin/handlers/revoke-cert
+  #   events:
+  #     - http:
+  #         path: cert/revoke
+  #         method: delete
+  #         cors: true
+
+
+package:
+  include:
+  - bin/**
+
+
+provider:
+  name: aws
+  runtime: go1.x
+
+# you can overwrite defaults here
+#  stage: dev
+  region: eu-west-1
