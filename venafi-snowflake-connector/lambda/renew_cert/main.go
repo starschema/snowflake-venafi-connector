@@ -78,7 +78,7 @@ func RenewCertificate(ctx context.Context, request events.APIGatewayProxyRequest
 	return events.APIGatewayProxyResponse{ // Success HTTP response
 		Body:       fmt.Sprintf("{'data': [[0, '%v']]}", requestID),
 		StatusCode: 200,
-	}, err
+	}, nil
 }
 
 func main() {
