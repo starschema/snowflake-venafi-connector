@@ -71,7 +71,7 @@ func GetAccessToken(tpp_url string) (string, error) {
 			layout := "2006-01-02T15:04:05.000Z"
 			t, _ := time.Parse(layout, expiritation_time)
 
-			if !found_exp || !found_token || !CheckIfAccessTokenIsValid(t) {
+			if !found_exp || !found_token || CheckIfAccessTokenIsValid(t) {
 				new_credentials := GetNewAccessToken(x)
 				if new_credentials != nil {
 					access_token = (*new_credentials)["access_token"]
