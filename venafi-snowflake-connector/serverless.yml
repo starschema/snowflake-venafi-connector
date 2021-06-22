@@ -33,14 +33,14 @@ functions:
     handler: bin/handlers/getcert
     package:
       include:
-        - ./bin/**
+        - bin/handlers/getcert
     events:
       - http:
           path: getcert
           method: post
-          cors: true
+          authorizer: aws_iam
     snowflake:
-      argument_signature: (request variant)
+      argument_signature: (tpp_url varchar, zone varchar, request_id varchar)
       data_type: variant
   # listCerts:
   #   handler: bin/handlers/list-certs
