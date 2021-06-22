@@ -35,8 +35,9 @@ func RequestCert(ctx context.Context, request events.APIGatewayProxyRequest) (ev
 	// Parse parameters sent by Snowflake from Lambda Event
 	dataForRequestCert.TppURL = fmt.Sprintf("%v", snowflakeData.Data[0][1])
 	dataForRequestCert.DNSName = fmt.Sprintf("%v", snowflakeData.Data[0][2]) // TODO: UPN, DNS should allow multiple values
-	dataForRequestCert.UPN = fmt.Sprintf("%v", snowflakeData.Data[0][3])
-	dataForRequestCert.CommonName = fmt.Sprintf("%v", snowflakeData.Data[0][4])
+	dataForRequestCert.Zone = fmt.Sprintf("%v", snowflakeData.Data[0][3])
+	dataForRequestCert.UPN = fmt.Sprintf("%v", snowflakeData.Data[0][4])
+	dataForRequestCert.CommonName = fmt.Sprintf("%v", snowflakeData.Data[0][5])
 
 	log.Infof("Finished parse parameters from event object")
 
@@ -60,10 +61,10 @@ func RequestCert(ctx context.Context, request events.APIGatewayProxyRequest) (ev
 			AccessToken: accessToken},
 	}
 	// Create a new Connector for Venafi API calls
-	c, err := utils.CreateVenafiConnectorFromParameters(snowflakeData, accessToken)
+	c, err := vcert.NewClient(config)
 	if err != nil {
-		log.Errorf("Failed to create venafi client %s", err)
-		return events.APIGatewayProxyResponse{
+		log.Errorf("Failed to create new client")
+		return events.APIGatewayProxyResponse{ // Error HTTP response
 			Body:       err.Error(),
 			StatusCode: 500,
 		}, err
