@@ -69,19 +69,19 @@ functions:
     snowflake:
       argument_signature: (tpp_url varchar, dns varchar, zone varchar, upn varchar, common_name varchar)
       data_type: variant
-  # getCertStatus:
-  #   handler: bin/handlers/getcertstatus
-  #   package:
-  #     include:
-  #       - ./bin/handlers/getcertstatus
-  #   events:
-  #     - http:
-  #         path: getcertstatus
-  #         method: post
-  #         authorizer: aws_iam
-  #   snowflake:
-  #     argument_signature: (tpp_url varchar, token varchar, request_id varchar)
-  #     data_type: variant
+  getCertStatus:
+    handler: bin/handlers/getcertstatus
+    package:
+      include:
+        - ./bin/handlers/getcertstatus
+    events:
+      - http:
+          path: getcertstatus
+          method: post
+          authorizer: aws_iam
+    snowflake:
+      argument_signature: (tpp_url varchar, zone varchar, common_name varchar)
+      data_type: variant
   renewCert:
       handler: bin/handlers/renewcert
       package:
