@@ -87,7 +87,7 @@ func RevokeCert(ctx context.Context, request events.APIGatewayProxyRequest) (eve
 	return events.APIGatewayProxyResponse{ // Success HTTP response
 		Body:       fmt.Sprintf("{'data': [[0, '%s']]}", dataForRequestCert.RequestID),
 		StatusCode: 200,
-	}, err
+	}, nil
 }
 
 func main() {

@@ -105,7 +105,7 @@ func RequestCert(ctx context.Context, request events.APIGatewayProxyRequest) (ev
 	return events.APIGatewayProxyResponse{ // Success HTTP response
 		Body:       fmt.Sprintf("{'data': [[0, '%v']]}", escaped_requestID),
 		StatusCode: 200,
-	}, err
+	}, nil
 }
 
 func main() {
