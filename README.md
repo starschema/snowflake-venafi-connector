@@ -55,42 +55,46 @@ custom:
     schema: public
 ```
 ### Deployment
-#### Example deployment of GETCERT external function
-1. `cd venafi-snowflake-connector/lambda/get_cert` # cd to source code folder
+#### Example deployment of GET_MACHINE_ID external function
+1. `cd venafi-snowflake-connector/lambda/get_machine_id` # cd to source code folder
 2. Modify main.go, and save the file.
-2. `GOOS=linux GOARCH=amd64  go build -o ../../bin/handlers/getcertstatus .` # create an executable to the handlers folder
+2. `GOOS=linux GOARCH=amd64  go build -o ../../bin/handlers/getmachineid .` # create an executable to the handlers folder
 3. `cd ...` # cd back to serverless.yml
 4. `serverless deploy`
 
 ### Usage
-The defined external functions can be called from Snowflake, usually with the tpp url as parameter, and the requestID of the certificate.
+
+**NOTE: Currently only TLS type is supported.**
+The defined external functions can be called from Snowflake, usually with the tpp url as parameter, and the requestID of the machine identity.
 Exmaple:
-`select GETCERT('https://example-tpp-url', '\\VED\\Policy\\Example/test.cert');`
-`select RENEWCERT('https://example-tpp-url', '\\VED\\Policy\\Example/test.cert');`
+`select GETMACHINEID('TLS, 'https://example-tpp-url', '\\VED\\Policy\\Example/test.cert');`
+`select RENEWMACHINEID('TLS', 'https://example-tpp-url', '\\VED\\Policy\\Example/test.cert');`
 
-To revoke a cert with retire:
-`select REVOKECERT('https://example-tpp-url', '\\VED\\Policy\\Example/test.cert', true);`
-To simply revoke a certifiacte:
-`select REVOKECERT('https://example-tpp-url', '\\VED\\Policy\\Example/test.cert', false);`
+To revoke a machine identity with retire:
+`select REVOKEMACHINEID('TLS','https://example-tpp-url', '\\VED\\Policy\\Example/test.cert', true);`
+To simply revoke a machine identity:
+`select REVOKEMACHINEID('TLS','https://example-tpp-url', '\\VED\\Policy\\Example/test.cert', false);`
 
 
-To list certificates in a specific zone:
-`select LISTCERTS('https://example-tpp-url', '\Policy\\ExampleZone');`
+To list machine identities in a specific zone:
+`select LISTMACHINEIDS('TLS', 'https://example-tpp-url', '\Policy\\ExampleZone');`
 
-To request a certificate:
-`select REQUESTCERT('https://example-tpp-url',
+To request a machine identity:
+`select REQUESTMACHINEID(
+    'TLS',
+    'https://example-tpp-url',
                    'dns',
                    'zone',
                    'upn',
-                   'new-cert-common-name'
+                   'new-md-common-name'
                   );`
 
-To get a status of a certificate:
-`select GET_CERTIFICATE_STATUS('https://example-tpp-url',
+To get a status of a machine identity:
+`select GETMACHINEIDSTATUS('https://example-tpp-url',
                    'dns',
                    'zone',
                    'upn',
-                   'new-cert-common-name'
+                   'new-md-common-name'
                   );`
 
 
