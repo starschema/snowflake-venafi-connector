@@ -117,9 +117,9 @@ provider:
   name: aws
   runtime: go1.x
   environment:
-    ZONE: "eu-west-1"
-    S3_BUCKET: venafi-credentials
-    CREDENTIAL_FILE_NAME: "credentials.json"
+    ZONE: "" # zone where bucket is created
+    S3_BUCKET: "" # name of the bucket where file is uploaed
+    CREDENTIAL_FILE_NAME: "" # venafi credential file
 
 # you can overwrite defaults here
 #  stage: dev
