@@ -2,11 +2,14 @@ package main
 
 import (
 	"context"
+	"crypto/x509/pkix"
 	"encoding/json"
 	"fmt"
 	"os"
+	"strings"
 
 	"github.com/Venafi/vcert/v4"
+	"github.com/Venafi/vcert/v4/pkg/certificate"
 	"github.com/Venafi/vcert/v4/pkg/endpoint"
 	"github.com/aws/aws-lambda-go/events"
 	"github.com/aws/aws-lambda-go/lambda"
@@ -14,7 +17,7 @@ import (
 	"github.com/starschema/snowflake-venafi-connector/lambda/utils"
 )
 
-func ListCertificates(ctx context.Context, request events.APIGatewayProxyRequest) (events.APIGatewayProxyResponse, error) {
+func RequestMachineID(ctx context.Context, request events.APIGatewayProxyRequest) (events.APIGatewayProxyResponse, error) {
 
 	log.AddTarget(os.Stdout, log.LevelDebug)
 
@@ -29,9 +32,18 @@ func ListCertificates(ctx context.Context, request events.APIGatewayProxyRequest
 		}, err
 	}
 
+	machineIDType := fmt.Sprintf("%v", snowflakeData.Data[0][1])
+	if machineIDType != utils.MachineIDTypeTLS {
+		machineIDType = utils.MachineIDTypeTLS // Currently only TLS requests are supported.
+	}
+	log.Infof("Type of the machine id to request: %s", machineIDType)
+
 	// Parse parameters sent by Snowflake from Lambda Event
-	dataForRequestCert.TppURL = fmt.Sprintf("%v", snowflakeData.Data[0][1])
-	dataForRequestCert.Zone = fmt.Sprintf("%v", snowflakeData.Data[0][2]) // TODO: UPN, DNS should allow multiple values
+	dataForRequestCert.TppURL = fmt.Sprintf("%v", snowflakeData.Data[0][2])
+	dataForRequestCert.DNSName = fmt.Sprintf("%v", snowflakeData.Data[0][3]) // TODO: UPN, DNS should allow multiple values
+	dataForRequestCert.Zone = fmt.Sprintf("%v", snowflakeData.Data[0][4])
+	dataForRequestCert.UPN = fmt.Sprintf("%v", snowflakeData.Data[0][5])
+	dataForRequestCert.CommonName = fmt.Sprintf("%v", snowflakeData.Data[0][6])
 
 	log.Infof("Finished parse parameters from event object")
 
@@ -64,22 +76,44 @@ func ListCertificates(ctx context.Context, request events.APIGatewayProxyRequest
 		}, err
 	}
 
-	certList, err := c.ListCertificates(endpoint.Filter{})
+	var enrollReq = &certificate.Request{}
+
+	enrollReq = &certificate.Request{
+		Subject: pkix.Name{
+			CommonName: dataForRequestCert.CommonName,
+		},
+		UPNs:     []string{dataForRequestCert.UPN},
+		DNSNames: []string{dataForRequestCert.DNSName},
+	}
+	err = c.GenerateRequest(nil, enrollReq)
 	if err != nil {
-		log.Errorf("Failed to list certificates: %s", err)
+		log.Errorf("Failed to generate request: %v ", err)
 		return events.APIGatewayProxyResponse{ // Error HTTP response
 			Body:       err.Error(),
 			StatusCode: 500,
 		}, err
 	}
-	log.Info("Sucessfully called List Certificates")
+
+	log.Info("Generate request was successful")
+	// Request a new certificate using Venafi API
+	requestID, err := c.RequestCertificate(enrollReq)
+	if err != nil {
+		log.Errorf("Failed to request certificate:: %v ", err)
+		return events.APIGatewayProxyResponse{ // Error HTTP response
+			Body:       err.Error(),
+			StatusCode: 500,
+		}, err
+	}
+	log.Infof("Certificate request was successful. RequestID is: %s", requestID)
+
+	escaped_requestID := strings.Replace(fmt.Sprintf("%v", requestID), "\\", "\\\\", -1)
 	// Transform data to a form which is readable by Snowflake
 	return events.APIGatewayProxyResponse{ // Success HTTP response
-		Body:       fmt.Sprintf("{'data': [[0, '%v']]}", certList),
+		Body:       fmt.Sprintf("{'data': [[0, '%v']]}", escaped_requestID),
 		StatusCode: 200,
-	}, err
+	}, nil
 }
 
 func main() {
-	lambda.Start(ListCertificates)
+	lambda.Start(RequestMachineID)
 }

@@ -2,14 +2,11 @@ package main
 
 import (
 	"context"
-	"crypto/x509/pkix"
 	"encoding/json"
 	"fmt"
 	"os"
-	"strings"
 
 	"github.com/Venafi/vcert/v4"
-	"github.com/Venafi/vcert/v4/pkg/certificate"
 	"github.com/Venafi/vcert/v4/pkg/endpoint"
 	"github.com/aws/aws-lambda-go/events"
 	"github.com/aws/aws-lambda-go/lambda"
@@ -17,7 +14,7 @@ import (
 	"github.com/starschema/snowflake-venafi-connector/lambda/utils"
 )
 
-func GetCertStatus(ctx context.Context, request events.APIGatewayProxyRequest) (events.APIGatewayProxyResponse, error) {
+func ListMachineIDs(ctx context.Context, request events.APIGatewayProxyRequest) (events.APIGatewayProxyResponse, error) {
 
 	log.AddTarget(os.Stdout, log.LevelDebug)
 
@@ -32,10 +29,19 @@ func GetCertStatus(ctx context.Context, request events.APIGatewayProxyRequest) (
 		}, err
 	}
 
-	dataForRequestCert.TppURL = fmt.Sprintf("%v", snowflakeData.Data[0][1])
-	dataForRequestCert.Zone = fmt.Sprintf("%v", snowflakeData.Data[0][2])
-	dataForRequestCert.CommonName = fmt.Sprintf("%v", snowflakeData.Data[0][3])
+	machineIDType := fmt.Sprintf("%v", snowflakeData.Data[0][1])
+	if machineIDType != utils.MachineIDTypeTLS {
+		machineIDType = utils.MachineIDTypeTLS // Currently only TLS requests are supported.
+	}
+	log.Infof("Type of the machine id to request: %s", machineIDType)
 
+	// Parse parameters sent by Snowflake from Lambda Event
+	dataForRequestCert.TppURL = fmt.Sprintf("%v", snowflakeData.Data[0][2])
+	dataForRequestCert.Zone = fmt.Sprintf("%v", snowflakeData.Data[0][3]) // TODO: UPN, DNS should allow multiple values
+
+	log.Infof("Finished parse parameters from event object")
+
+	// Get access token from S3. If access token is expired, generate a new one.
 	accessToken, err := utils.GetAccessToken(dataForRequestCert.TppURL)
 	if err != nil {
 		log.Errorf("Failed to get accesss token: %s", err)
@@ -45,6 +51,8 @@ func GetCertStatus(ctx context.Context, request events.APIGatewayProxyRequest) (
 		}, err
 	}
 
+	log.Info("Got valid access token from S3")
+
 	config := &vcert.Config{
 		ConnectorType: endpoint.ConnectorTypeTPP,
 		BaseUrl:       dataForRequestCert.TppURL,
@@ -52,54 +60,32 @@ func GetCertStatus(ctx context.Context, request events.APIGatewayProxyRequest) (
 		Credentials: &endpoint.Authentication{
 			AccessToken: accessToken},
 	}
-
+	// Create a new Connector for Venafi API calls
 	c, err := vcert.NewClient(config)
 	if err != nil {
-		fmt.Printf("Failed to connect to endpoint: %s", err)
-		return events.APIGatewayProxyResponse{
-			Body:       fmt.Sprintf("{'data': [[0, '%v']]}", err.Error()),
-			StatusCode: 500,
-		}, err
-	}
-
-	enrollReq := &certificate.Request{
-		Subject: pkix.Name{
-			CommonName: dataForRequestCert.CommonName},
-	}
-	// Request a new certificate using Venafi API
-	err = c.GenerateRequest(nil, enrollReq)
-	if err != nil {
-		log.Errorf("Failed to generate request: %v ", err)
+		log.Errorf("Failed to create new client")
 		return events.APIGatewayProxyResponse{ // Error HTTP response
 			Body:       err.Error(),
 			StatusCode: 500,
 		}, err
 	}
 
-	log.Info("Generate request was successful")
-	// Request a new certificate using Venafi API
-	_, err = c.RequestCertificate(enrollReq)
+	certList, err := c.ListCertificates(endpoint.Filter{})
 	if err != nil {
-		if strings.Contains(err.Error(), "disabled") {
-			return events.APIGatewayProxyResponse{ // Success HTTP response
-				Body:       fmt.Sprintf("{'data': [[0, '%v']]}", "Certificate is disabled"),
-				StatusCode: 200,
-			}, nil
-		} else {
-			log.Errorf("Failed to get status of certificate: %v ", err)
-			return events.APIGatewayProxyResponse{ // Error HTTP response
-				Body:       err.Error(),
-				StatusCode: 500,
-			}, err
-		}
+		log.Errorf("Failed to list certificates: %s", err)
+		return events.APIGatewayProxyResponse{ // Error HTTP response
+			Body:       err.Error(),
+			StatusCode: 500,
+		}, err
 	}
+	log.Info("Sucessfully called List Certificates")
 	// Transform data to a form which is readable by Snowflake
 	return events.APIGatewayProxyResponse{ // Success HTTP response
-		Body:       fmt.Sprintf("{'data': [[0, '%v']]}", "Certificate is enabled"),
+		Body:       fmt.Sprintf("{'data': [[0, '%v']]}", certList),
 		StatusCode: 200,
-	}, nil
+	}, err
 }
 
 func main() {
-	lambda.Start(GetCertStatus)
+	lambda.Start(ListMachineIDs)
 }

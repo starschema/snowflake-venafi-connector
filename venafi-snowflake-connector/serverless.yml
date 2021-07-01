@@ -29,87 +29,85 @@ plugins:
 #  Every function that should be available as external function in snowflake needs
 #  at least argument_signature and data_type information
 functions:
-  getCert:
-    handler: bin/handlers/getcert
+  get_machine_id:
+    handler: bin/handlers/getmachineid
     package:
       include:
-        - bin/handlers/getcert
+        - bin/handlers/getmachineid
     events:
       - http:
-          path: getcert
+          path: getmachineid
           method: post
           authorizer: aws_iam
     snowflake:
-      argument_signature: (tpp_url varchar, request_id varchar)
+      argument_signature: (type varchar, tpp_url varchar, request_id varchar)
       data_type: variant
-  listCerts:
-    handler: bin/handlers/listcert
+  list_machine_ids:
+    handler: bin/handlers/listmachineids
     package:
       include:
-        - ./bin/handlers/listcert
+        - ./bin/handlers/listmachineids
     events:
       - http:
-          path: listcert
+          path: listmachineids
           method: post
           authorizer: aws_iam
     snowflake:
-          argument_signature: (tpp_url varchar, zone varchar)
+          argument_signature: (type varchar, tpp_url varchar, zone varchar)
           data_type: variant
-  requestCert:
-    handler: bin/handlers/requestcert
+  request_machine_id:
+    handler: bin/handlers/requestmachineid
     timeout: 35
     package:
       include:
-        - ./bin/handlers/requestcert
+        - ./bin/handlers/requestmachineid
     events:
       - http:
-          path: requestcert
+          path: requestmachineid
           method: post
           authorizer: aws_iam
     snowflake:
-      argument_signature: (tpp_url varchar, dns varchar, zone varchar, upn varchar, common_name varchar)
+      argument_signature: (type varchar, tpp_url varchar, dns varchar, zone varchar, upn varchar, common_name varchar)
       data_type: variant
-  getCertStatus:
-    handler: bin/handlers/getcertstatus
+  get_machine_id_status:
+    handler: bin/handlers/getmachineidstatus
     package:
       include:
-        - ./bin/handlers/getcertstatus
+        - ./bin/handlers/getmachineidstatus
     events:
       - http:
-          path: getcertstatus
+          path: getmachineidstatus
           method: post
           authorizer: aws_iam
     snowflake:
-      argument_signature: (tpp_url varchar, zone varchar, common_name varchar)
+      argument_signature: (type varchar, tpp_url varchar, zone varchar, common_name varchar)
       data_type: variant
-  renewCert:
-      handler: bin/handlers/renewcert
+  renew_machine_id:
+      handler: bin/handlers/renewmachineid
       package:
         include:
-          - ./bin/handlers/renewcert
+          - ./bin/handlers/renewmachineid
       events:
         - http:
-            path: renewcert
+            path: renewmachineid
             method: post
             authorizer: aws_iam
       snowflake:
-        argument_signature: (tpp_url varchar, request_id varchar)
+        argument_signature: (type varchar, tpp_url varchar, request_id varchar)
         data_type: variant
-  revokeCert:
-    handler: bin/handlers/revokecert
+  revoke_machine_id:
+    handler: bin/handlers/revokemachineid
     package:
       include:
-        - ./bin/handlers/revokecert
+        - ./bin/handlers/revokemachineid
     events:
       - http:
-          path: revokecert
+          path: revokemachineid
           method: post
           authorizer: aws_iam
     snowflake:
-      argument_signature: (tpp_url varchar, request_id varchar, should_disable varchar)
+      argument_signature: (type varchar, tpp_url varchar, request_id varchar, should_disable varchar)
       data_type: variant
-
-
 package:
   include:
   - bin/**
@@ -118,6 +116,10 @@ package:
 provider:
   name: aws
   runtime: go1.x
+  environment:
+    ZONE: "eu-west-1"
+    S3_BUCKET: venafi-credentials
+    CREDENTIAL_FILE_NAME: "credentials.json"
 
 # you can overwrite defaults here
 #  stage: dev
