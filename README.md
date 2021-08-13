@@ -6,7 +6,7 @@ Helper library with samples to make Venafi services available as Snowflake funct
 * Serverless Tool - `npm install serverless -g`
 * Serverless Snowflake Plugin - `npm install serverless-snowflake-external-function-plugin`
 
-The deployment was tested with node version: v10.16.0
+The deployment was tested with node version: v14.16.0
 
 ### AWS
 
@@ -103,3 +103,5 @@ If the deployment fails, check the credentials both in Snowflake and AWS. Make s
 
 If execution fails:
 Check the monitoring page of the function in AWS Lambda. The logs will provide information about the errors.
+
+If you delete functions manually the stack of lambdas can change. Useful link to resolve: https://stackoverflow.com/questions/58382779/serverless-deploy-function-not-found-sls-deploy
