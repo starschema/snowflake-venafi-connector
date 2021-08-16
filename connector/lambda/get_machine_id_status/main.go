@@ -17,7 +17,7 @@ import (
 	"github.com/starschema/snowflake-venafi-connector/lambda/utils"
 )
 
-func RequestCert(ctx context.Context, request events.APIGatewayProxyRequest) (events.APIGatewayProxyResponse, error) {
+func GetMachineIDStatus(ctx context.Context, request events.APIGatewayProxyRequest) (events.APIGatewayProxyResponse, error) {
 
 	log.AddTarget(os.Stdout, log.LevelDebug)
 
@@ -32,16 +32,16 @@ func RequestCert(ctx context.Context, request events.APIGatewayProxyRequest) (ev
 		}, err
 	}
 
-	// Parse parameters sent by Snowflake from Lambda Event
-	dataForRequestCert.TppURL = fmt.Sprintf("%v", snowflakeData.Data[0][1])
-	dataForRequestCert.DNSName = fmt.Sprintf("%v", snowflakeData.Data[0][2]) // TODO: UPN, DNS should allow multiple values
+	machineIDType := fmt.Sprintf("%v", snowflakeData.Data[0][1])
+	if machineIDType != utils.MachineIDTypeTLS {
+		machineIDType = utils.MachineIDTypeTLS // Currently only TLS requests are supported.
+	}
+	log.Infof("Type of the machine id to request: %s", machineIDType)
+
+	dataForRequestCert.TppURL = fmt.Sprintf("%v", snowflakeData.Data[0][2])
 	dataForRequestCert.Zone = fmt.Sprintf("%v", snowflakeData.Data[0][3])
-	dataForRequestCert.UPN = fmt.Sprintf("%v", snowflakeData.Data[0][4])
-	dataForRequestCert.CommonName = fmt.Sprintf("%v", snowflakeData.Data[0][5])
+	dataForRequestCert.CommonName = fmt.Sprintf("%v", snowflakeData.Data[0][4])
 
-	log.Infof("Finished parse parameters from event object")
-
-	// Get access token from S3. If access token is expired, generate a new one.
 	accessToken, err := utils.GetAccessToken(dataForRequestCert.TppURL)
 	if err != nil {
 		log.Errorf("Failed to get accesss token: %s", err)
@@ -51,8 +51,6 @@ func RequestCert(ctx context.Context, request events.APIGatewayProxyRequest) (ev
 		}, err
 	}
 
-	log.Info("Got valid access token from S3")
-
 	config := &vcert.Config{
 		ConnectorType: endpoint.ConnectorTypeTPP,
 		BaseUrl:       dataForRequestCert.TppURL,
@@ -60,25 +58,21 @@ func RequestCert(ctx context.Context, request events.APIGatewayProxyRequest) (ev
 		Credentials: &endpoint.Authentication{
 			AccessToken: accessToken},
 	}
-	// Create a new Connector for Venafi API calls
+
 	c, err := vcert.NewClient(config)
 	if err != nil {
-		log.Errorf("Failed to create new client")
-		return events.APIGatewayProxyResponse{ // Error HTTP response
-			Body:       err.Error(),
+		fmt.Printf("Failed to connect to endpoint: %s", err)
+		return events.APIGatewayProxyResponse{
+			Body:       fmt.Sprintf("{'data': [[0, '%v']]}", err.Error()),
 			StatusCode: 500,
 		}, err
 	}
 
-	var enrollReq = &certificate.Request{}
-
-	enrollReq = &certificate.Request{
+	enrollReq := &certificate.Request{
 		Subject: pkix.Name{
-			CommonName: dataForRequestCert.CommonName,
-		},
-		UPNs:     []string{dataForRequestCert.UPN},
-		DNSNames: []string{dataForRequestCert.DNSName},
+			CommonName: dataForRequestCert.CommonName},
 	}
+	// Request a new certificate using Venafi API
 	err = c.GenerateRequest(nil, enrollReq)
 	if err != nil {
 		log.Errorf("Failed to generate request: %v ", err)
@@ -90,24 +84,28 @@ func RequestCert(ctx context.Context, request events.APIGatewayProxyRequest) (ev
 
 	log.Info("Generate request was successful")
 	// Request a new certificate using Venafi API
-	requestID, err := c.RequestCertificate(enrollReq)
+	_, err = c.RequestCertificate(enrollReq)
 	if err != nil {
-		log.Errorf("Failed to request certificate:: %v ", err)
-		return events.APIGatewayProxyResponse{ // Error HTTP response
-			Body:       err.Error(),
-			StatusCode: 500,
-		}, err
+		if strings.Contains(err.Error(), "disabled") {
+			return events.APIGatewayProxyResponse{ // Success HTTP response
+				Body:       fmt.Sprintf("{'data': [[0, '%v']]}", "Certificate is disabled"),
+				StatusCode: 200,
+			}, nil
+		} else {
+			log.Errorf("Failed to get status of certificate: %v ", err)
+			return events.APIGatewayProxyResponse{ // Error HTTP response
+				Body:       err.Error(),
+				StatusCode: 500,
+			}, err
+		}
 	}
-	log.Infof("Certificate request was successful. RequestID is: %s", requestID)
-
-	escaped_requestID := strings.Replace(fmt.Sprintf("%v", requestID), "\\", "\\\\", -1)
 	// Transform data to a form which is readable by Snowflake
 	return events.APIGatewayProxyResponse{ // Success HTTP response
-		Body:       fmt.Sprintf("{'data': [[0, '%v']]}", escaped_requestID),
+		Body:       fmt.Sprintf("{'data': [[0, '%v']]}", "Certificate is enabled"),
 		StatusCode: 200,
 	}, nil
 }
 
 func main() {
-	lambda.Start(RequestCert)
+	lambda.Start(GetMachineIDStatus)
 }

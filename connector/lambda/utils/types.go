@@ -10,6 +10,8 @@ type VenafiConnectorConfig struct {
 	RequestID   string `json:"requestID,omitempty"`
 }
 
+const MachineIDTypeTLS = "TLS"
+
 type SnowFlakeType struct {
 	Data [][]interface{} `json:"data,omitempty"`
 }

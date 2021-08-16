@@ -1,0 +1,205 @@
+# Welcome to Serverless!
+#
+# This file is the main config file for your service.
+# It's very minimal at this point and uses default values.
+# You can always add more config options for more control.
+# We've included some commented out config examples here.
+# Just uncomment any of them to get that config option.
+#
+# For full config options, check the docs:
+#    docs.serverless.com
+#
+# Happy Coding!
+
+# app and org for use with dashboard.serverless.com
+#app: your-app-name
+#org: your-org-name
+
+# You can pin your service to only deploy with a specific Serverless version
+# Check out our docs for more details
+# frameworkVersion: "=X.X.X"
+
+
+
+
+service: venafi-snowflake-connector
+plugins:
+  - serverless-snowflake-external-function-plugin
+
+#  Every function that should be available as external function in snowflake needs
+#  at least argument_signature and data_type information
+functions:
+  get_machine_id:
+    handler: bin/handlers/getmachineid
+    package:
+      include:
+        - bin/handlers/getmachineid
+    events:
+      - http:
+          path: getmachineid
+          method: post
+          authorizer: aws_iam
+    snowflake:
+      argument_signature: (type varchar, tpp_url varchar, request_id varchar)
+      data_type: variant
+  get_mid:
+    handler: bin/handlers/getmachineid
+    package:
+      include:
+        - bin/handlers/getmachineid
+    events:
+      - http:
+          path: getmachineid
+          method: post
+          authorizer: aws_iam
+    snowflake:
+      argument_signature: (type varchar, tpp_url varchar, request_id varchar)
+      data_type: variant
+  list_machine_ids:
+    handler: bin/handlers/listmachineids
+    package:
+      include:
+        - ./bin/handlers/listmachineids
+    events:
+      - http:
+          path: listmachineids
+          method: post
+          authorizer: aws_iam
+    snowflake:
+          argument_signature: (type varchar, tpp_url varchar, zone varchar)
+          data_type: variant
+  list_mids:
+    handler: bin/handlers/listmachineids
+    package:
+      include:
+        - ./bin/handlers/listmachineids
+    events:
+      - http:
+          path: listmachineids
+          method: post
+          authorizer: aws_iam
+    snowflake:
+          argument_signature: (type varchar, tpp_url varchar, zone varchar)
+          data_type: variant
+  request_machine_id:
+    handler: bin/handlers/requestmachineid
+    timeout: 35
+    package:
+      include:
+        - ./bin/handlers/requestmachineid
+    events:
+      - http:
+          path: requestmachineid
+          method: post
+          authorizer: aws_iam
+    snowflake:
+      argument_signature: (type varchar, tpp_url varchar, dns varchar, zone varchar, upn varchar, common_name varchar)
+      data_type: variant
+  request_mid:
+    handler: bin/handlers/requestmachineid
+    timeout: 35
+    package:
+      include:
+        - ./bin/handlers/requestmachineid
+    events:
+      - http:
+          path: requestmachineid
+          method: post
+          authorizer: aws_iam
+    snowflake:
+      argument_signature: (type varchar, tpp_url varchar, dns varchar, zone varchar, upn varchar, common_name varchar)
+      data_type: variant
+  get_machine_id_status:
+    handler: bin/handlers/getmachineidstatus
+    package:
+      include:
+        - ./bin/handlers/getmachineidstatus
+    events:
+      - http:
+          path: getmachineidstatus
+          method: post
+          authorizer: aws_iam
+    snowflake:
+      argument_signature: (type varchar, tpp_url varchar, zone varchar, common_name varchar)
+      data_type: variant
+  get_mid_status:
+    handler: bin/handlers/getmachineidstatus
+    package:
+      include:
+        - ./bin/handlers/getmachineidstatus
+    events:
+      - http:
+          path: getmachineidstatus
+          method: post
+          authorizer: aws_iam
+    snowflake:
+      argument_signature: (type varchar, tpp_url varchar, zone varchar, common_name varchar)
+      data_type: variant
+  renew_machine_id:
+      handler: bin/handlers/renewmachineid
+      package:
+        include:
+          - ./bin/handlers/renewmachineid
+      events:
+        - http:
+            path: renewmachineid
+            method: post
+            authorizer: aws_iam
+      snowflake:
+        argument_signature: (type varchar, tpp_url varchar, request_id varchar)
+        data_type: variant
+  renew_mid:
+    handler: bin/handlers/renewmachineid
+    package:
+      include:
+        - ./bin/handlers/renewmachineid
+    events:
+      - http:
+          path: renewmachineid
+          method: post
+          authorizer: aws_iam
+    snowflake:
+      argument_signature: (type varchar, tpp_url varchar, request_id varchar)
+      data_type: variant
+  revoke_machine_id:
+    handler: bin/handlers/revokemachineid
+    package:
+      include:
+        - ./bin/handlers/revokemachineid
+    events:
+      - http:
+          path: revokemachineid
+          method: post
+          authorizer: aws_iam
+    snowflake:
+      argument_signature: (type varchar, tpp_url varchar, request_id varchar, should_disable varchar)
+      data_type: variant
+  revoke_mid:
+    handler: bin/handlers/revokemachineid
+    package:
+      include:
+        - ./bin/handlers/revokemachineid
+    events:
+      - http:
+          path: revokemachineid
+          method: post
+          authorizer: aws_iam
+    snowflake:
+      argument_signature: (type varchar, tpp_url varchar, request_id varchar, should_disable varchar)
+      data_type: variant
+package:
+  include:
+  - bin/**
+
+
+provider:
+  name: aws
+  runtime: go1.x
+  environment:
+    ZONE: "" # zone where bucket is created
+    S3_BUCKET: "" # name of the bucket where file is uploaed
+    CREDENTIAL_FILE_NAME: "" # venafi credential file
+
+# you can overwrite defaults here
+#  stage: dev
+  region: eu-west-1

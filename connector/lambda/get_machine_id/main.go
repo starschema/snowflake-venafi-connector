@@ -5,8 +5,8 @@ import (
 	"encoding/json"
 	"fmt"
 	"os"
-	"strconv"
 	"strings"
+	"time"
 
 	"github.com/starschema/snowflake-venafi-connector/lambda/utils"
 
@@ -18,7 +18,7 @@ import (
 	log "github.com/palette-software/go-log-targets"
 )
 
-func RevokeCert(ctx context.Context, request events.APIGatewayProxyRequest) (events.APIGatewayProxyResponse, error) {
+func GetMachineID(ctx context.Context, request events.APIGatewayProxyRequest) (events.APIGatewayProxyResponse, error) {
 
 	log.AddTarget(os.Stdout, log.LevelDebug)
 
@@ -30,21 +30,16 @@ func RevokeCert(ctx context.Context, request events.APIGatewayProxyRequest) (eve
 		return events.APIGatewayProxyResponse{ // Error HTTP response
 			Body:       err.Error(),
 			StatusCode: 500,
-		}, err
+		}, nil
 	}
-
-	dataForRequestCert.TppURL = fmt.Sprintf("%v", snowflakeData.Data[0][1])
-	escaped_requestID := strings.Replace(fmt.Sprintf("%v", snowflakeData.Data[0][2]), "\\", "\\\\", -1)
-	shouldDisable, err := strconv.ParseBool(fmt.Sprintf("%v", snowflakeData.Data[0][3]))
-	if err != nil {
-		log.Errorf("Failed to parse disable request property from Snowflake parameters: %s", err)
-		return events.APIGatewayProxyResponse{ // Error HTTP response
-			Body:       err.Error(),
-			StatusCode: 500,
-		}, err
+	machineIDType := fmt.Sprintf("%v", snowflakeData.Data[0][1])
+	if machineIDType != utils.MachineIDTypeTLS {
+		machineIDType = utils.MachineIDTypeTLS // Currently only TLS requests are supported.
 	}
+	log.Infof("Type of the machine id to request: %s", machineIDType)
 
-	dataForRequestCert.RequestID = escaped_requestID
+	dataForRequestCert.TppURL = fmt.Sprintf("%v", snowflakeData.Data[0][2])
+	escaped_pickupID := strings.Replace(fmt.Sprintf("%v", snowflakeData.Data[0][3]), "\\", "\\\\", -1)
 
 	accessToken, err := utils.GetAccessToken(dataForRequestCert.TppURL)
 	if err != nil {
@@ -55,6 +50,8 @@ func RevokeCert(ctx context.Context, request events.APIGatewayProxyRequest) (eve
 		}, err
 	}
 
+	dataForRequestCert.RequestID = escaped_pickupID
+
 	config := &vcert.Config{
 		ConnectorType: endpoint.ConnectorTypeTPP,
 		BaseUrl:       dataForRequestCert.TppURL,
@@ -64,32 +61,43 @@ func RevokeCert(ctx context.Context, request events.APIGatewayProxyRequest) (eve
 
 	c, err := vcert.NewClient(config)
 	if err != nil {
-		fmt.Printf("Failed to connect to endpoint: %s", err)
+		log.Errorf("Failed to connect to endpoint: %s", err)
 		return events.APIGatewayProxyResponse{
 			Body:       fmt.Sprintf("{'data': [[0, '%v']]}", err.Error()),
 			StatusCode: 500,
-		}, err
+		}, nil
 	}
 
-	revokeReq := &certificate.RevocationRequest{
-		CertificateDN: dataForRequestCert.RequestID,
-		Disable:       shouldDisable,
+	pickupReq := &certificate.Request{
+		PickupID: dataForRequestCert.RequestID,
+		Timeout:  180 * time.Second,
 	}
 
-	err = c.RevokeCertificate(revokeReq)
+	pcc, err := c.RetrieveCertificate(pickupReq)
 	if err != nil {
+		log.Errorf("Could not get certificate: %s", err)
 		return events.APIGatewayProxyResponse{
 			Body:       fmt.Sprintf("{'data': [[0, '%v']]}", err.Error()),
 			StatusCode: 500,
-		}, err
+		}, nil
 	}
-	log.Infof("Successfully revoked certificate: %s", dataForRequestCert.RequestID)
+
+	bytes, err := json.Marshal(pcc)
+	if err != nil {
+		log.Errorf("Failed to serialize certificate: %v", err)
+		return events.APIGatewayProxyResponse{
+			Body:       fmt.Sprintf("{'data': [[0, '%v']]}", err.Error()),
+			StatusCode: 500,
+		}, nil
+	}
+
+	log.Infof("Retrieving certificate was succesful")
 	return events.APIGatewayProxyResponse{ // Success HTTP response
-		Body:       fmt.Sprintf("{'data': [[0, '%s']]}", dataForRequestCert.RequestID),
+		Body:       fmt.Sprintf("{'data': [[0, '%v']]}", string(bytes)),
 		StatusCode: 200,
 	}, nil
 }
 
 func main() {
-	lambda.Start(RevokeCert)
+	lambda.Start(GetMachineID)
 }

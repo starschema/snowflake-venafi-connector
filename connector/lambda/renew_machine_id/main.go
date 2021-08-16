@@ -6,7 +6,6 @@ import (
 	"fmt"
 	"os"
 	"strings"
-	"time"
 
 	"github.com/starschema/snowflake-venafi-connector/lambda/utils"
 
@@ -18,7 +17,7 @@ import (
 	log "github.com/palette-software/go-log-targets"
 )
 
-func GetCert(ctx context.Context, request events.APIGatewayProxyRequest) (events.APIGatewayProxyResponse, error) {
+func RenewMachineID(ctx context.Context, request events.APIGatewayProxyRequest) (events.APIGatewayProxyResponse, error) {
 
 	log.AddTarget(os.Stdout, log.LevelDebug)
 
@@ -30,11 +29,18 @@ func GetCert(ctx context.Context, request events.APIGatewayProxyRequest) (events
 		return events.APIGatewayProxyResponse{ // Error HTTP response
 			Body:       err.Error(),
 			StatusCode: 500,
-		}, nil
+		}, err
 	}
 
-	dataForRequestCert.TppURL = fmt.Sprintf("%v", snowflakeData.Data[0][1])
-	escaped_pickupID := strings.Replace(fmt.Sprintf("%v", snowflakeData.Data[0][2]), "\\", "\\\\", -1)
+	machineIDType := fmt.Sprintf("%v", snowflakeData.Data[0][1])
+	if machineIDType != utils.MachineIDTypeTLS {
+		machineIDType = utils.MachineIDTypeTLS // Currently only TLS requests are supported.
+	}
+	log.Infof("Type of the machine id to request: %s", machineIDType)
+
+	dataForRequestCert.TppURL = fmt.Sprintf("%v", snowflakeData.Data[0][2])
+	escaped_requestID := strings.Replace(fmt.Sprintf("%v", snowflakeData.Data[0][3]), "\\", "\\\\", -1)
+	dataForRequestCert.RequestID = escaped_requestID
 
 	accessToken, err := utils.GetAccessToken(dataForRequestCert.TppURL)
 	if err != nil {
@@ -45,54 +51,42 @@ func GetCert(ctx context.Context, request events.APIGatewayProxyRequest) (events
 		}, err
 	}
 
-	dataForRequestCert.RequestID = escaped_pickupID
-
 	config := &vcert.Config{
 		ConnectorType: endpoint.ConnectorTypeTPP,
 		BaseUrl:       dataForRequestCert.TppURL,
+		Zone:          dataForRequestCert.Zone,
 		Credentials: &endpoint.Authentication{
 			AccessToken: accessToken},
 	}
 
 	c, err := vcert.NewClient(config)
 	if err != nil {
-		log.Errorf("Failed to connect to endpoint: %s", err)
+		fmt.Printf("Failed to connect to endpoint: %s", err)
 		return events.APIGatewayProxyResponse{
 			Body:       fmt.Sprintf("{'data': [[0, '%v']]}", err.Error()),
 			StatusCode: 500,
-		}, nil
+		}, err
 	}
 
-	pickupReq := &certificate.Request{
-		PickupID: dataForRequestCert.RequestID,
-		Timeout:  180 * time.Second,
+	renewReq := &certificate.RenewalRequest{
+		CertificateDN: dataForRequestCert.RequestID,
 	}
 
-	pcc, err := c.RetrieveCertificate(pickupReq)
+	requestID, err := c.RenewCertificate(renewReq)
 	if err != nil {
-		log.Errorf("Could not get certificate: %s", err)
+		log.Errorf("Failed to renew certificate: %v", err)
 		return events.APIGatewayProxyResponse{
 			Body:       fmt.Sprintf("{'data': [[0, '%v']]}", err.Error()),
 			StatusCode: 500,
-		}, nil
+		}, err
 	}
-
-	bytes, err := json.Marshal(pcc)
-	if err != nil {
-		log.Errorf("Failed to serialize certificate: %v", err)
-		return events.APIGatewayProxyResponse{
-			Body:       fmt.Sprintf("{'data': [[0, '%v']]}", err.Error()),
-			StatusCode: 500,
-		}, nil
-	}
-
-	log.Infof("Retrieving certificate was succesful")
+	log.Infof("Successfully renewed certificate %s", requestID)
 	return events.APIGatewayProxyResponse{ // Success HTTP response
-		Body:       fmt.Sprintf("{'data': [[0, '%v']]}", string(bytes)),
+		Body:       fmt.Sprintf("{'data': [[0, '%v']]}", requestID),
 		StatusCode: 200,
 	}, nil
 }
 
 func main() {
-	lambda.Start(GetCert)
+	lambda.Start(RenewMachineID)
 }
