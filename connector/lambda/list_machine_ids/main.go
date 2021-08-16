@@ -14,8 +14,8 @@ func ListMachineIDs(ctx context.Context, request events.APIGatewayProxyRequest) 
 
 	log.AddTarget(os.Stdout, log.LevelDebug)
 
-	connectorParams := utils.ParseSnowflakeParameters(request, utils.LIST_MID_TYPE)
-	client, err := utils.NewVenafiConnector(connectorParams)
+	configParams, _ := utils.ParseSnowflakeParameters(request, utils.LIST_MID_TYPE)
+	client, err := utils.NewVenafiConnector(configParams)
 	if err != nil {
 		log.Errorf("Failed to create venafi client from snowflake parameters: %v", err)
 		return events.APIGatewayProxyResponse{ // Error HTTP response
@@ -23,7 +23,7 @@ func ListMachineIDs(ctx context.Context, request events.APIGatewayProxyRequest) 
 			StatusCode: 500,
 		}, err
 	}
-	snowflakeResponse, err := client.ListMachineIDs()
+	snowflakeResponse, err := client.ListMachineIDs(ctx)
 	if err != nil {
 		return events.APIGatewayProxyResponse{
 			Body:       snowflakeResponse,

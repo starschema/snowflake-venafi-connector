@@ -14,9 +14,9 @@ func RevokeMachineID(ctx context.Context, request events.APIGatewayProxyRequest)
 
 	log.AddTarget(os.Stdout, log.LevelDebug)
 
-	connectorParams := utils.ParseSnowflakeParameters(request, utils.REVOKE_MID_TYPE)
+	configParams, requestParams := utils.ParseSnowflakeParameters(request, utils.REVOKE_MID_TYPE)
 
-	client, err := utils.NewVenafiConnector(connectorParams)
+	client, err := utils.NewVenafiConnector(configParams)
 	if err != nil {
 		log.Errorf("Failed to create venafi client from snowflake parameters: %v", err)
 		return events.APIGatewayProxyResponse{ // Error HTTP response
@@ -24,14 +24,14 @@ func RevokeMachineID(ctx context.Context, request events.APIGatewayProxyRequest)
 			StatusCode: 500,
 		}, err
 	}
-	snowflakeResponse, err := client.RevokeMachineID(connectorParams.RequestID, connectorParams.Disable)
+	snowflakeResponse, err := client.RevokeMachineID(ctx, requestParams.RequestID, requestParams.Disable)
 	if err != nil {
 		return events.APIGatewayProxyResponse{
 			Body:       snowflakeResponse,
 			StatusCode: 500,
 		}, err
 	}
-	log.Infof("Successfully revoked certificate: %s", connectorParams.RequestID)
+	log.Infof("Successfully revoked certificate: %s", requestParams.RequestID)
 	return events.APIGatewayProxyResponse{ // Success HTTP response
 		Body:       snowflakeResponse,
 		StatusCode: 200,

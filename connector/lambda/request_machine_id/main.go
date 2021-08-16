@@ -14,8 +14,8 @@ func RequestMachineID(ctx context.Context, request events.APIGatewayProxyRequest
 
 	log.AddTarget(os.Stdout, log.LevelDebug)
 
-	connectorParams := utils.ParseSnowflakeParameters(request, utils.REQUEST_MID_TYPE)
-	client, err := utils.NewVenafiConnector(connectorParams)
+	configParams, requestParams := utils.ParseSnowflakeParameters(request, utils.REQUEST_MID_TYPE)
+	client, err := utils.NewVenafiConnector(configParams)
 	if err != nil {
 		log.Errorf("Failed to create venafi client from snowflake parameters: %v", err)
 		return events.APIGatewayProxyResponse{ // Error HTTP response
@@ -23,14 +23,14 @@ func RequestMachineID(ctx context.Context, request events.APIGatewayProxyRequest
 			StatusCode: 500,
 		}, err
 	}
-	snowflakeResponse, err := client.RequestMachineID(connectorParams.CommonName, connectorParams.UPN, connectorParams.DNSName)
+	snowflakeResponse, err := client.RequestMachineID(ctx, requestParams.CommonName, requestParams.UPN, requestParams.DNSName)
 	if err != nil {
 		return events.APIGatewayProxyResponse{
 			Body:       snowflakeResponse,
 			StatusCode: 500,
 		}, err
 	}
-	log.Infof("Successfully requested certificate: %s", connectorParams.RequestID)
+	log.Infof("Successfully requested certificate: %s", requestParams.RequestID)
 	return events.APIGatewayProxyResponse{ // Success HTTP response
 		Body:       snowflakeResponse,
 		StatusCode: 200,

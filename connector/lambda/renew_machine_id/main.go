@@ -15,8 +15,8 @@ func RenewMachineID(ctx context.Context, request events.APIGatewayProxyRequest) 
 
 	log.AddTarget(os.Stdout, log.LevelDebug)
 
-	connectorParams := utils.ParseSnowflakeParameters(request, utils.RENEW_MID_TYPE)
-	client, err := utils.NewVenafiConnector(connectorParams)
+	configParams, requestParams := utils.ParseSnowflakeParameters(request, utils.RENEW_MID_TYPE)
+	client, err := utils.NewVenafiConnector(configParams)
 	if err != nil {
 		log.Errorf("Failed to create venafi client from snowflake parameters: %v", err)
 		return events.APIGatewayProxyResponse{ // Error HTTP response
@@ -24,14 +24,14 @@ func RenewMachineID(ctx context.Context, request events.APIGatewayProxyRequest) 
 			StatusCode: 500,
 		}, err
 	}
-	snowflakeResponse, err := client.RenewMachineID(connectorParams.RequestID)
+	snowflakeResponse, err := client.RenewMachineID(ctx, requestParams.RequestID)
 	if err != nil {
 		return events.APIGatewayProxyResponse{
 			Body:       snowflakeResponse,
 			StatusCode: 500,
 		}, err
 	}
-	log.Infof("Successfully renewed certificate: %s", connectorParams.RequestID)
+	log.Infof("Successfully renewed certificate: %s", requestParams.RequestID)
 	return events.APIGatewayProxyResponse{ // Success HTTP response
 		Body:       snowflakeResponse,
 		StatusCode: 200,

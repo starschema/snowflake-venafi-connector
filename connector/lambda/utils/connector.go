@@ -1,6 +1,7 @@
 package utils
 
 import (
+	"context"
 	"crypto/x509/pkix"
 	"encoding/json"
 	"fmt"
@@ -18,29 +19,29 @@ type venafiConnector struct {
 }
 
 type VenafiConnector interface {
-	RequestMachineID(commonName, upn, dns string) (string, error)
-	GetMachineID(requestID string) (string, error)
-	ListMachineIDs() (string, error)
-	RevokeMachineIDs(requestID string, disable bool) (string, error)
-	RenewMachineIDs(requestID string) (string, error)
-	GetMachineIDStatus(commonName string) (string, error)
+	RequestMachineID(ctx context.Context, commonName, upn, dns string) (string, error)
+	GetMachineID(ctx context.Context, requestID string) (string, error)
+	ListMachineIDs(ctx context.Context) (string, error)
+	RevokeMachineIDs(ctx context.Context, requestID string, disable bool) (string, error)
+	RenewMachineIDs(ctx context.Context, requestID string) (string, error)
+	GetMachineIDStatus(ctx context.Context, commonName string) (string, error)
 }
 
 func createSnowflakeResponse(data string) string {
 	return fmt.Sprintf("{'data': [[0, '%v']]}", data)
 }
 
-func NewVenafiConnector(connectorParams SnowflakeParameters) (*venafiConnector, error) {
+func NewVenafiConnector(configParams ConfigParameters) (*venafiConnector, error) {
 
-	accessToken, err := GetAccessToken(connectorParams.TppURL)
+	accessToken, err := GetAccessToken(configParams.TppURL)
 	if err != nil {
 		log.Errorf("Failed to get accesss token: %s", err)
 		return nil, err
 	}
 	config := &vcert.Config{
 		ConnectorType: endpoint.ConnectorTypeTPP,
-		BaseUrl:       connectorParams.TppURL,
-		Zone:          connectorParams.Zone,
+		BaseUrl:       configParams.TppURL,
+		Zone:          configParams.Zone,
 		Credentials: &endpoint.Authentication{
 			AccessToken: accessToken},
 	}
@@ -55,7 +56,7 @@ func NewVenafiConnector(connectorParams SnowflakeParameters) (*venafiConnector, 
 	}, nil
 }
 
-func (c *venafiConnector) RequestMachineID(cn string, up string, dns string) (string, error) {
+func (c *venafiConnector) RequestMachineID(ctx context.Context, cn string, up string, dns string) (string, error) {
 	enrollReq := &certificate.Request{
 		Subject: pkix.Name{
 			CommonName: cn,
@@ -82,7 +83,7 @@ func (c *venafiConnector) RequestMachineID(cn string, up string, dns string) (st
 	return createSnowflakeResponse(escaped_requestID), nil
 }
 
-func (c *venafiConnector) GetMachineID(requestID string) (string, error) {
+func (c *venafiConnector) GetMachineID(ctx context.Context, requestID string) (string, error) {
 	pickupReq := &certificate.Request{
 		PickupID: requestID,
 		Timeout:  180 * time.Second,
@@ -102,7 +103,7 @@ func (c *venafiConnector) GetMachineID(requestID string) (string, error) {
 	return createSnowflakeResponse(string(bytes)), nil
 }
 
-func (c *venafiConnector) ListMachineIDs() (string, error) {
+func (c *venafiConnector) ListMachineIDs(ctx context.Context) (string, error) {
 	certList, err := c.client.ListCertificates(endpoint.Filter{})
 	if err != nil {
 		log.Errorf("Failed to list certificates: %s", err)
@@ -113,7 +114,7 @@ func (c *venafiConnector) ListMachineIDs() (string, error) {
 	return createSnowflakeResponse(fmt.Sprintf("%s", certList)), nil
 }
 
-func (c *venafiConnector) RevokeMachineID(requestID string, disable bool) (string, error) {
+func (c *venafiConnector) RevokeMachineID(ctx context.Context, requestID string, disable bool) (string, error) {
 	revokeReq := &certificate.RevocationRequest{
 		CertificateDN: requestID,
 		Disable:       disable,
@@ -127,7 +128,7 @@ func (c *venafiConnector) RevokeMachineID(requestID string, disable bool) (strin
 	return createSnowflakeResponse(requestID), nil
 }
 
-func (c *venafiConnector) RenewMachineID(requestID string) (string, error) {
+func (c *venafiConnector) RenewMachineID(ctx context.Context, requestID string) (string, error) {
 	renewReq := &certificate.RenewalRequest{
 		CertificateDN: requestID,
 	}
@@ -140,7 +141,7 @@ func (c *venafiConnector) RenewMachineID(requestID string) (string, error) {
 	return createSnowflakeResponse(requestID), nil
 }
 
-func (c *venafiConnector) GetMachineIDStatus(cn string) (string, error) {
+func (c *venafiConnector) GetMachineIDStatus(ctx context.Context, cn string) (string, error) {
 	enrollReq := &certificate.Request{
 		Subject: pkix.Name{
 			CommonName: cn},
