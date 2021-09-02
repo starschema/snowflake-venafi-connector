@@ -2,17 +2,10 @@ package main
 
 import (
 	"context"
-	"encoding/json"
-	"fmt"
 	"os"
-	"strings"
-	"time"
 
 	"github.com/starschema/snowflake-venafi-connector/lambda/utils"
 
-	"github.com/Venafi/vcert/v4"
-	"github.com/Venafi/vcert/v4/pkg/certificate"
-	"github.com/Venafi/vcert/v4/pkg/endpoint"
 	"github.com/aws/aws-lambda-go/events"
 	"github.com/aws/aws-lambda-go/lambda"
 	log "github.com/palette-software/go-log-targets"
@@ -22,78 +15,26 @@ func GetMachineID(ctx context.Context, request events.APIGatewayProxyRequest) (e
 
 	log.AddTarget(os.Stdout, log.LevelDebug)
 
-	var dataForRequestCert utils.VenafiConnectorConfig
-	var snowflakeData utils.SnowFlakeType
-	err := json.Unmarshal([]byte(request.Body), &snowflakeData)
+	configParams, requestParams := utils.ParseSnowflakeParameters(request, utils.GET_MID_TYPE)
+	client, err := utils.NewVenafiConnector(configParams)
 	if err != nil {
-		log.Errorf("Failed to unmarshal snowflake parameters: %s", err)
-		return events.APIGatewayProxyResponse{ // Error HTTP response
-			Body:       err.Error(),
-			StatusCode: 500,
-		}, nil
-	}
-	machineIDType := fmt.Sprintf("%v", snowflakeData.Data[0][1])
-	if machineIDType != utils.MachineIDTypeTLS {
-		machineIDType = utils.MachineIDTypeTLS // Currently only TLS requests are supported.
-	}
-	log.Infof("Type of the machine id to request: %s", machineIDType)
-
-	dataForRequestCert.TppURL = fmt.Sprintf("%v", snowflakeData.Data[0][2])
-	escaped_pickupID := strings.Replace(fmt.Sprintf("%v", snowflakeData.Data[0][3]), "\\", "\\\\", -1)
-
-	accessToken, err := utils.GetAccessToken(dataForRequestCert.TppURL)
-	if err != nil {
-		log.Errorf("Failed to get accesss token: %s", err)
+		log.Errorf("Failed to create venafi client from snowflake parameters: %v", err)
 		return events.APIGatewayProxyResponse{ // Error HTTP response
 			Body:       err.Error(),
 			StatusCode: 500,
 		}, err
 	}
 
-	dataForRequestCert.RequestID = escaped_pickupID
-
-	config := &vcert.Config{
-		ConnectorType: endpoint.ConnectorTypeTPP,
-		BaseUrl:       dataForRequestCert.TppURL,
-		Credentials: &endpoint.Authentication{
-			AccessToken: accessToken},
-	}
-
-	c, err := vcert.NewClient(config)
+	snowflakeResponse, err := client.GetMachineID(ctx, requestParams.RequestID)
 	if err != nil {
-		log.Errorf("Failed to connect to endpoint: %s", err)
 		return events.APIGatewayProxyResponse{
-			Body:       fmt.Sprintf("{'data': [[0, '%v']]}", err.Error()),
+			Body:       snowflakeResponse,
 			StatusCode: 500,
-		}, nil
+		}, err
 	}
-
-	pickupReq := &certificate.Request{
-		PickupID: dataForRequestCert.RequestID,
-		Timeout:  180 * time.Second,
-	}
-
-	pcc, err := c.RetrieveCertificate(pickupReq)
-	if err != nil {
-		log.Errorf("Could not get certificate: %s", err)
-		return events.APIGatewayProxyResponse{
-			Body:       fmt.Sprintf("{'data': [[0, '%v']]}", err.Error()),
-			StatusCode: 500,
-		}, nil
-	}
-
-	bytes, err := json.Marshal(pcc)
-	if err != nil {
-		log.Errorf("Failed to serialize certificate: %v", err)
-		return events.APIGatewayProxyResponse{
-			Body:       fmt.Sprintf("{'data': [[0, '%v']]}", err.Error()),
-			StatusCode: 500,
-		}, nil
-	}
-
-	log.Infof("Retrieving certificate was succesful")
+	log.Infof("Successfully retrieved certificate: %s", requestParams.RequestID)
 	return events.APIGatewayProxyResponse{ // Success HTTP response
-		Body:       fmt.Sprintf("{'data': [[0, '%v']]}", string(bytes)),
+		Body:       snowflakeResponse,
 		StatusCode: 200,
 	}, nil
 }

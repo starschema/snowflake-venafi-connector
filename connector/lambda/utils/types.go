@@ -15,3 +15,10 @@ const MachineIDTypeTLS = "TLS"
 type SnowFlakeType struct {
 	Data [][]interface{} `json:"data,omitempty"`
 }
+
+const LIST_MID_TYPE = "list"
+const REQUEST_MID_TYPE = "request"
+const GET_MID_TYPE = "get"
+const GET_STATUS_MID_TYPE = "status"
+const RENEW_MID_TYPE = "renew"
+const REVOKE_MID_TYPE = "revoke"
