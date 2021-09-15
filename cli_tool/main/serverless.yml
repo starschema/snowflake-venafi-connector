@@ -35,10 +35,74 @@ custom:
     database: ${file(./config.yml):snowflake.database}
     schema: ${file(./config.yml):snowflake.schema}
 
+# resources:
+#   Resources:
+#     LambdaRole:
+#       Type: AWS::IAM::Role
+#       Properties:
+#         RoleName: Venafi-full-access-to-s3-and-lambda_by_serverless
+#         AssumeRolePolicyDocument:
+#           Version: '2012-10-17'
+#           Statement:
+#             - Effect: Allow
+#               Principal:
+#                 Service:
+#                   - lambda.amazonaws.com
+#                   - s3.amazonaws.com
+#                   - cloudwatch.amazonaws.com
+#               Action: sts:AssumeRole
+#         Policies:
+#           - PolicyName: AmazonS3FullAccess
+#             PolicyDocument:
+#               Version: '2012-10-17'
+#               Statement:
+#                 - Effect: Allow
+#                   Action:
+#                     - s3:*
+#                   Resource: "*"
+#           - PolicyName: AWSLambda_FullAccess
+#             PolicyDocument:
+#               Version: '2012-10-17'
+#               Statement:
+#                 - Effect: Allow
+#                   Action:
+#                     - cloudformation:DescribeStacks
+#                     - cloudformation:ListStackResources
+#                     - cloudwatch:ListMetrics
+#                     - cloudwatch:GetMetricData
+#                     - ec2:DescribeSecurityGroups
+#                     - ec2:DescribeSubnets
+#                     - ec2:DescribeVpcs
+#                     - kms:ListAliases
+#                     - iam:GetPolicy
+#                     - iam:GetPolicyVersion
+#                     - iam:GetRole"
+#                     - iam:GetRolePolicy
+#                     - iam:ListAttachedRolePolicies
+#                     - iam:ListRolePolicies
+#                     - iam:ListRoles
+#                     - lambda:*
+#                     - logs:DescribeLogGroups
+#                     - states:DescribeStateMachine
+#                     - states:ListStateMachines
+#                     - tag:GetResources
+#                     - xray:GetTraceSummaries
+#                     - xray:BatchGetTraces
+#                   Resource: "*"
+#           - PolicyName: CloudWatchLogsFullAccess
+#             PolicyDocument:
+#               Version: '2012-10-17'
+#               Statement:
+#                 - Effect: Allow
+#                   Action:
+#                     - logs:*
+#                   Resource: "*"
+
 #  Every function that should be available as external function in snowflake needs
 #  at least argument_signature and data_type information
 functions:
   get_machine_id:
+    role: arn:aws:iam::300480681691:role/Venafi-full-access-to-s3-and-lambda
     handler: bin/handlers/getmachineid
     package:
       include:
@@ -52,6 +116,7 @@ functions:
       argument_signature: (type varchar, tpp_url varchar, request_id varchar)
       data_type: variant
   get_mid:
+    role: arn:aws:iam::300480681691:role/Venafi-full-access-to-s3-and-lambda
     handler: bin/handlers/getmachineid
     package:
       include:
@@ -65,6 +130,7 @@ functions:
       argument_signature: (type varchar, tpp_url varchar, request_id varchar)
       data_type: variant
   list_machine_ids:
+    role: arn:aws:iam::300480681691:role/Venafi-full-access-to-s3-and-lambda
     handler: bin/handlers/listmachineids
     package:
       include:
@@ -78,6 +144,7 @@ functions:
           argument_signature: (type varchar, tpp_url varchar, zone varchar)
           data_type: variant
   list_mids:
+    role: arn:aws:iam::300480681691:role/Venafi-full-access-to-s3-and-lambda
     handler: bin/handlers/listmachineids
     package:
       include:
@@ -91,6 +158,7 @@ functions:
           argument_signature: (type varchar, tpp_url varchar, zone varchar)
           data_type: variant
   request_machine_id:
+    role: arn:aws:iam::300480681691:role/Venafi-full-access-to-s3-and-lambda
     handler: bin/handlers/requestmachineid
     timeout: 35
     package:
@@ -105,11 +173,14 @@ functions:
       argument_signature: (type varchar, tpp_url varchar, dns varchar, zone varchar, upn varchar, common_name varchar)
       data_type: variant
   request_mid:
+    role: arn:aws:iam::300480681691:role/Venafi-full-access-to-s3-and-lambda
     handler: bin/handlers/requestmachineid
     timeout: 35
     package:
       include:
         - ../bin/handlers/requestmachineid
+      exclude:
+        - node_modules/**
     events:
       - http:
           path: requestmachineid
@@ -119,10 +190,13 @@ functions:
       argument_signature: (type varchar, tpp_url varchar, dns varchar, zone varchar, upn varchar, common_name varchar)
       data_type: variant
   get_machine_id_status:
+    role: arn:aws:iam::300480681691:role/Venafi-full-access-to-s3-and-lambda
     handler: bin/handlers/getmachineidstatus
     package:
       include:
         - ../bin/handlers/getmachineidstatus
+      exclude:
+        - node_modules/**
     events:
       - http:
           path: getmachineidstatus
@@ -132,10 +206,13 @@ functions:
       argument_signature: (type varchar, tpp_url varchar, zone varchar, common_name varchar)
       data_type: variant
   get_mid_status:
+    role: arn:aws:iam::300480681691:role/Venafi-full-access-to-s3-and-lambda
     handler: bin/handlers/getmachineidstatus
     package:
       include:
         - ../bin/handlers/getmachineidstatus
+      exclude:
+        - node_modules/**
     events:
       - http:
           path: getmachineidstatus
@@ -145,23 +222,29 @@ functions:
       argument_signature: (type varchar, tpp_url varchar, zone varchar, common_name varchar)
       data_type: variant
   renew_machine_id:
-      handler: bin/handlers/renewmachineid
-      package:
-        include:
-          - ../bin/handlers/renewmachineid
-      events:
-        - http:
-            path: renewmachineid
-            method: post
-            authorizer: aws_iam
-      snowflake:
-        argument_signature: (type varchar, tpp_url varchar, request_id varchar)
-        data_type: variant
-  renew_mid:
+    role: arn:aws:iam::300480681691:role/Venafi-full-access-to-s3-and-lambda
     handler: bin/handlers/renewmachineid
     package:
       include:
         - ../bin/handlers/renewmachineid
+      exclude:
+        - node_modules/**
+    events:
+      - http:
+          path: renewmachineid
+          method: post
+          authorizer: aws_iam
+    snowflake:
+      argument_signature: (type varchar, tpp_url varchar, request_id varchar)
+      data_type: variant
+  renew_mid:
+    role: arn:aws:iam::300480681691:role/Venafi-full-access-to-s3-and-lambda
+    handler: bin/handlers/renewmachineid
+    package:
+      include:
+        - ../bin/handlers/renewmachineid
+      exclude:
+        - node_modules/**
     events:
       - http:
           path: renewmachineid
@@ -171,10 +254,13 @@ functions:
       argument_signature: (type varchar, tpp_url varchar, request_id varchar)
       data_type: variant
   revoke_machine_id:
+    role: arn:aws:iam::300480681691:role/Venafi-full-access-to-s3-and-lambda
     handler: bin/handlers/revokemachineid
     package:
       include:
         - ../bin/handlers/revokemachineid
+      exclude:
+        - node_modules/**
     events:
       - http:
           path: revokemachineid
@@ -184,10 +270,13 @@ functions:
       argument_signature: (type varchar, tpp_url varchar, request_id varchar, should_disable varchar)
       data_type: variant
   revoke_mid:
+    # role: arn:aws:iam::300480681691:role/Venafi-full-access-to-s3-and-lambda
     handler: bin/handlers/revokemachineid
     package:
       include:
         - ../bin/handlers/revokemachineid
+      exclude:
+        - node_modules/**
     events:
       - http:
           path: revokemachineid
@@ -196,15 +285,17 @@ functions:
     snowflake:
       argument_signature: (type varchar, tpp_url varchar, request_id varchar, should_disable varchar)
       data_type: variant
-package:
-  include:
-  - bin/**
-
+# package:
+#   include:
+#   - bin/**
+# exclude:
+#   - node_modules/**
 
 provider:
   name: aws
   profile: venafi-snowflake-connector
   runtime: go1.x
+  region: ${file(./config.yml):aws.zone}
   environment:
     ZONE: ${file(./config.yml):aws.zone} # zone where bucket is created
     S3_BUCKET: ${file(./config.yml):aws.s3bucket} # name of the bucket where file is uploaed
@@ -212,4 +303,3 @@ provider:
 
 # you can overwrite defaults here
 #  stage: dev
-  region: eu-west-1
