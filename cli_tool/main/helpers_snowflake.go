@@ -3,6 +3,7 @@ package main
 import (
 	"database/sql"
 	"fmt"
+	"log"
 
 	_ "github.com/snowflakedb/gosnowflake"
 )
@@ -30,8 +31,30 @@ func CreateSnowflakeApiIntegration(integrationName string, awsRoleARN string, en
 	}
 	defer db.Close()
 	sql := fmt.Sprintf(`create or replace api integration cica api_provider = aws_api_gateway api_aws_role_arn = '%s' enabled = true api_allowed_prefixes = ('%s')`, awsRoleARN, endpointUrl)
-	result, err := db.Exec(sql)
-	fmt.Printf("result: %v", result)
+	_, err = db.Exec(sql)
+	if err != nil {
+		return "", "", err
+	}
+
+	sql = fmt.Sprintf(`describe integration cica`)
+	rows, err := db.Query(sql)
+	if err != nil {
+		log.Fatal(err)
+	}
+	defer rows.Close()
+
+	names := make([]string, 0)
+	var p string
+	var e string
+	var b string
+	for rows.Next() {
+		var name string
+		if err := rows.Scan(&names); err != nil {
+			log.Fatal(err)
+		}
+		names = append(names, name)
+	}
+	fmt.Printf("result2: %v", names)
 	if err != nil {
 		return "", "", err
 	}

@@ -99,13 +99,13 @@ func Install() {
 	}
 
 	if status.SnowflakeFunctions.State != 1 { // TODO
-		CreateSnowflakeFunction(LAMBDA_FUNCTION_NAME_GETMACHINEID, "", "")
-		CreateSnowflakeFunction(LAMBDA_FUNCTION_NAME_REQUESTMACHINEID, "", "")
-		CreateSnowflakeFunction(LAMBDA_FUNCTION_NAME_LISTMACHINEIDS, "", "")
-		CreateSnowflakeFunction(LAMBDA_FUNCTION_NAME_RENEWMACHINEID, "", "")
-		CreateSnowflakeFunction(LAMBDA_FUNCTION_NAME_RENEWMACHINEID, "", "")
-		CreateSnowflakeFunction(LAMBDA_FUNCTION_NAME_REVOKEMACHINEID, "", "")
-		CreateSnowflakeFunction(LAMBDA_FUNCTION_NAME_GETMACHINEIDSTATUS, "", "")
+		// CreateSnowflakeFunction(LAMBDA_FUNCTION_NAME_GETMACHINEID, "", "")
+		// CreateSnowflakeFunction(LAMBDA_FUNCTION_NAME_REQUESTMACHINEID, "", "")
+		// CreateSnowflakeFunction(LAMBDA_FUNCTION_NAME_LISTMACHINEIDS, "", "")
+		// CreateSnowflakeFunction(LAMBDA_FUNCTION_NAME_RENEWMACHINEID, "", "")
+		// CreateSnowflakeFunction(LAMBDA_FUNCTION_NAME_RENEWMACHINEID, "", "")
+		// CreateSnowflakeFunction(LAMBDA_FUNCTION_NAME_REVOKEMACHINEID, "", "")
+		// CreateSnowflakeFunction(LAMBDA_FUNCTION_NAME_GETMACHINEIDSTATUS, "", "")
 		Log(true, "Created all Snowflake External Functions\n", 1)
 	} else {
 		Log(true, "Api Integration and Snowflake Functions are ready\n", 1)
