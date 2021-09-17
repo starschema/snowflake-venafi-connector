@@ -26,36 +26,34 @@ func LogFatal(message string, params ...interface{}) {
 func main() {
 	c := ConfigOptions{
 		Aws: AwsOptions{
-			AccessKeyID: "AKIAUL5QLK3NUBRQ7NZC",
-			AccessKey:   "ED0025MFNeOP8qNX5bj5msWvzJM2NS704cGUUZy3",
-			Zone:        "eu-west-1",
-			Bucket:      "venafi-credentials3",
+			AccessKeyID: "",
+			AccessKey:   "",
+			Zone:        "",
+			Bucket:      "",
 		},
 		Snowflake: []SnowflakeOptions{
 			{
-				Role:      "VENAFI_DEV",
-				Account:   "starschema",
-				Username:  "rakosif",
-				Password:  "Hesoyam12!",
-				Warehouse: "LOAD_WH",
-				Database:  "TEST_DB",
-				Schema:    "public",
+				Role:      "",
+				Account:   "",
+				Username:  "",
+				Password:  "",
+				Warehouse: "",
+				Database:  "",
+				Schema:    "",
 			},
 		},
 		Venafi: []VenafiOptions{
 			{
-				AccessToken:        "B3iyS8xj/4Uw0KJ+XGz2sQ==",
-				AccessTokenExpires: "1632654570",
-				RefreshToken:       "GtHWtb451BNShQeQNCSnsg==",
-				Url:                "https://uvo1xwzeppk6efvbk65.env.cloudshare.com",
+				AccessToken:        "",
+				AccessTokenExpires: "",
+				RefreshToken:       "",
+				Url:                "",
 			},
 		},
 	}
 	SetConfig(c)
 
-
 	PrintStatus(GetStatus(0))
-
 
 	Install()
 	fmt.Print("over")
