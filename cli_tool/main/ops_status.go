@@ -5,7 +5,10 @@ import (
 	"errors"
 	"fmt"
 
+	"github.com/aws/aws-sdk-go-v2/service/apigateway"
+	"github.com/aws/aws-sdk-go-v2/service/iam"
 	"github.com/aws/aws-sdk-go-v2/service/lambda"
+	"github.com/aws/aws-sdk-go-v2/service/s3"
 )
 
 type ServiceStatus struct {
@@ -53,9 +56,8 @@ type FunctionCheckState struct {
 	AnyMissing bool
 }
 
-func GetStatus(tabIndex int) ServiceStatus {
+func GetStatus(tabIndex int, c ConfigOptions, s3Client *s3.Client, lambdaClient *lambda.Client, iamClient *iam.Client, gatewayClient *apigateway.Client, accountId string) ServiceStatus {
 	ret := ServiceStatus{}
-	c, _, s3Client, lambdaClient, iamClient, _ := bootstrapOperation(tabIndex)
 	Log(true, "Connecting to AWS & getting Bucket '%v' ... ", 0, c.Aws.Bucket)
 	_, credsInvalid, bucketNotFound, err := GetBucket(s3Client, c.Aws.Bucket)
 	if err != nil {
@@ -95,10 +97,10 @@ func GetStatus(tabIndex int) ServiceStatus {
 	}
 
 	// Check Roles
-	roleName := "Venafi-test-access"
+	roleName := "venafi-test-access"
 
 	ret.AwsLambdaS3Role = GetLambdaRole(iamClient, roleName)
-	ret.AwsLambdaSnowflakeRole = GetLambdaRole(iamClient, "snowflake-execute")
+	ret.AwsLambdaSnowflakeRole = GetLambdaRole(iamClient, "venafi-execute-role")
 
 	// Check AWS lambas
 	lambda_state := FunctionCheckState{}
@@ -127,16 +129,15 @@ func GetStatus(tabIndex int) ServiceStatus {
 
 	// Check Snowflake External Functions
 	snowflake_state := FunctionCheckState{}
-	ret.SnowflakeFunctions_Details.GetMachineId = getSnowflakeFunctionStatus(c.Snowflake[0], LAMBDA_FUNCTION_NAME_GETMACHINEID, &snowflake_state)
-	ret.SnowflakeFunctions_Details.RequestMachineId = getSnowflakeFunctionStatus(c.Snowflake[0], LAMBDA_FUNCTION_NAME_REQUESTMACHINEID, &snowflake_state)
-	ret.SnowflakeFunctions_Details.ListMachineIds = getSnowflakeFunctionStatus(c.Snowflake[0], LAMBDA_FUNCTION_NAME_LISTMACHINEIDS, &snowflake_state)
-	ret.SnowflakeFunctions_Details.RenewMachineId = getSnowflakeFunctionStatus(c.Snowflake[0], LAMBDA_FUNCTION_NAME_RENEWMACHINEID, &snowflake_state)
-	ret.SnowflakeFunctions_Details.RevokeMachineId = getSnowflakeFunctionStatus(c.Snowflake[0], LAMBDA_FUNCTION_NAME_REVOKEMACHINEID, &snowflake_state)
-	ret.SnowflakeFunctions_Details.GetMachineIdStatus = getSnowflakeFunctionStatus(c.Snowflake[0], LAMBDA_FUNCTION_NAME_GETMACHINEIDSTATUS, &snowflake_state)
-
+	ret.SnowflakeFunctions_Details.GetMachineId = getSnowflakeFunctionStatus(c.Snowflake[0], SNOWFLAKE_FUNCTION_NAME_GETMACHINEID, &snowflake_state)
+	ret.SnowflakeFunctions_Details.RequestMachineId = getSnowflakeFunctionStatus(c.Snowflake[0], SNOWFLAKE_FUNCTION_NAME_REQUESTMACHINEID, &snowflake_state)
+	ret.SnowflakeFunctions_Details.ListMachineIds = getSnowflakeFunctionStatus(c.Snowflake[0], SNOWFLAKE_FUNCTION_NAME_LISTMACHINEIDS, &snowflake_state)
+	ret.SnowflakeFunctions_Details.RenewMachineId = getSnowflakeFunctionStatus(c.Snowflake[0], SNOWFLAKE_FUNCTION_NAME_RENEWMACHINEID, &snowflake_state)
+	ret.SnowflakeFunctions_Details.RevokeMachineId = getSnowflakeFunctionStatus(c.Snowflake[0], SNOWFLAKE_FUNCTION_NAME_REVOKEMACHINEID, &snowflake_state)
+	ret.SnowflakeFunctions_Details.GetMachineIdStatus = getSnowflakeFunctionStatus(c.Snowflake[0], SNOWFLAKE_FUNCTION_NAME_GETMACHINEIDSTATUS, &snowflake_state)
 	if snowflake_state.AnyError {
 		ret.SnowflakeFunctions.State = 2
-	} else if lambda_state.AnyMissing {
+	} else if snowflake_state.AnyMissing {
 		ret.SnowflakeFunctions.State = 3
 	} else {
 		ret.SnowflakeFunctions.State = 1
@@ -164,7 +165,7 @@ func PrintStatus(status ServiceStatus) {
 
 	printStatusResult("Snowflake connection", status.SnowflakeConnection, "Success", "Error", "")
 
-	printStatusResult("Snowflake functions", status.SnowflakeFunctions, "All Snowflake External Functions are online", "One or more lambdas are in error state or missing", "One or more lambdas are in error state")
+	printStatusResult("Snowflake functions", status.SnowflakeFunctions, "All Snowflake External Functions are online", "One or more Snowflake functions in error state", "One or more Snowflake functions are missing")
 	printAwsLambdaResult("GetMachineId", status.SnowflakeFunctions_Details.GetMachineId)
 	printAwsLambdaResult("RequestMachineId", status.SnowflakeFunctions_Details.RequestMachineId)
 	printAwsLambdaResult("ListMachineIds", status.SnowflakeFunctions_Details.ListMachineIds)

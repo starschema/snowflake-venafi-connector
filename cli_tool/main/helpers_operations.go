@@ -6,9 +6,10 @@ import (
 	"github.com/aws/aws-sdk-go-v2/service/iam"
 	"github.com/aws/aws-sdk-go-v2/service/lambda"
 	"github.com/aws/aws-sdk-go-v2/service/s3"
+	"github.com/aws/aws-sdk-go-v2/service/sts"
 )
 
-func bootstrapOperation(tabIndex int) (ConfigOptions, aws.Config, *s3.Client, *lambda.Client, *iam.Client, *apigateway.Client) {
+func bootstrapOperation(tabIndex int) (ConfigOptions, aws.Config, *s3.Client, *lambda.Client, *iam.Client, *apigateway.Client, *sts.Client) {
 	Log(true, "Getting app config", tabIndex)
 	c := GetConfig()
 	Log(true, "Getting AWS config", tabIndex)
@@ -22,5 +23,8 @@ func bootstrapOperation(tabIndex int) (ConfigOptions, aws.Config, *s3.Client, *l
 	Log(true, "Create API Gateway client", tabIndex)
 	gatewayClient := apigateway.NewFromConfig(awsConfig)
 
-	return c, awsConfig, s3Client, lambdaClient, iamClient, gatewayClient
+	Log(true, "Create STS client", tabIndex)
+	stsClient := sts.NewFromConfig(awsConfig)
+
+	return c, awsConfig, s3Client, lambdaClient, iamClient, gatewayClient, stsClient
 }

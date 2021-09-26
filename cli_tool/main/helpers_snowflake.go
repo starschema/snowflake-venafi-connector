@@ -4,16 +4,17 @@ import (
 	"database/sql"
 	"fmt"
 	"log"
+	"strings"
 
 	_ "github.com/snowflakedb/gosnowflake"
 )
 
-const SNOFLAKE_FUNCTION_NAME_GETMACHINEID = "GET_MACHINE_ID"
-const SNOFLAKE_FUNCTION_NAME_REQUESTMACHINEID = "REQUEST_MACHINE_ID"
-const SNOFLAKE_FUNCTION_NAME_LISTMACHINEIDS = "LIST_MACHINEI_DS"
-const SNOFLAKE_FUNCTION_NAME_RENEWMACHINEID = "RENEW_MACHINE_ID"
-const SNOFLAKE_FUNCTION_NAME_REVOKEMACHINEID = "REVOKE_MACHINE_ID"
-const SNOFLAKE_FUNCTION_NAME_GETMACHINEIDSTATUS = "GET_MACHINE_ID_STATUS"
+const SNOWFLAKE_FUNCTION_NAME_GETMACHINEID = "getmachineid"
+const SNOWFLAKE_FUNCTION_NAME_REQUESTMACHINEID = "requestmachineid"
+const SNOWFLAKE_FUNCTION_NAME_LISTMACHINEIDS = "listmachineids"
+const SNOWFLAKE_FUNCTION_NAME_RENEWMACHINEID = "renewmachineid"
+const SNOWFLAKE_FUNCTION_NAME_REVOKEMACHINEID = "revokemachineid"
+const SNOWFLAKE_FUNCTION_NAME_GETMACHINEIDSTATUS = "getmachineidstatus"
 
 func CheckSnowflakeConnection() error {
 	db, err := sql.Open("snowflake", "")
@@ -30,76 +31,93 @@ func CreateSnowflakeApiIntegration(integrationName string, awsRoleARN string, en
 		return "", "", err
 	}
 	defer db.Close()
-	sql := fmt.Sprintf(`create or replace api integration cica api_provider = aws_api_gateway api_aws_role_arn = '%s' enabled = true api_allowed_prefixes = ('%s')`, awsRoleARN, endpointUrl)
+	sql := fmt.Sprintf(`create or replace api integration venafi_integration api_provider = aws_api_gateway api_aws_role_arn = '%s' enabled = true api_allowed_prefixes = ('%s')`, awsRoleARN, endpointUrl)
 	_, err = db.Exec(sql)
 	if err != nil {
 		return "", "", err
 	}
-
-	sql = fmt.Sprintf(`describe integration cica`)
+	sql = fmt.Sprintf(`describe integration venafi_integration`)
 	rows, err := db.Query(sql)
 	if err != nil {
 		log.Fatal(err)
 	}
 	defer rows.Close()
 
-	names := make([]string, 0)
-	var p string
-	var e string
-	var b string
+	final := make(map[string]string)
 	for rows.Next() {
-		var name string
-		if err := rows.Scan(&names); err != nil {
+		var a string
+		var p string
+		var e string
+		var b string
+		if err := rows.Scan(&a, &p, &e, &b); err != nil {
 			log.Fatal(err)
 		}
-		names = append(names, name)
+		final[a] = e
 	}
-	fmt.Printf("result2: %v", names)
 	if err != nil {
 		return "", "", err
 	}
 
-	return "", "", nil //TODO qUERY return values
+	return final["API_AWS_EXTERNAL_ID"], final["API_AWS_IAM_USER_ARN"], nil //TODO qUERY return values
 }
 
-func CreateSnowflakeFunction(functionName string, endpoint string, path string) error {
+func CreateSnowflakeFunction(functionName string, endpoint string) {
+	path := endpoint + functionName
+	var paramStr string
+	switch functionName {
+	case SNOWFLAKE_FUNCTION_NAME_GETMACHINEID:
+		paramStr = "(type varchar, tpp_url varchar, request_id varchar)"
+	case SNOWFLAKE_FUNCTION_NAME_RENEWMACHINEID:
+		paramStr = "(type varchar, tpp_url varchar, request_id varchar)"
+	case SNOWFLAKE_FUNCTION_NAME_REVOKEMACHINEID:
+		paramStr = "(type varchar, tpp_url varchar, request_id varchar)"
+	case SNOWFLAKE_FUNCTION_NAME_REQUESTMACHINEID:
+		paramStr = "(type varchar, tpp_url varchar, dns varchar, zone varchar, upn varchar, common_name varchar)"
+	case SNOWFLAKE_FUNCTION_NAME_LISTMACHINEIDS:
+		paramStr = "(type varchar, tpp_url varchar, zone varchar)"
+	case SNOWFLAKE_FUNCTION_NAME_GETMACHINEIDSTATUS:
+		paramStr = "(type varchar, tpp_url varchar, zone varchar, common_name varchar)"
+	default:
+		fmt.Printf("############## invalid function name: %v", functionName)
+	}
+
 	db, err := sql.Open("snowflake", "")
 	if err != nil {
-		return err
+		log.Fatal("Failed to create function: " + err.Error())
+		return
 	}
 	defer db.Close()
 	sql := fmt.Sprintf(`
-			create or replace external function <functionname> <parameters>
+			create or replace external function %s %s
 			returns variant
-			api_integration = <integrationName>
+			api_integration = venafi_integration
 			COMPRESSION = none
-			as <endpoint>/<path>`)
-	result, err := db.Exec(sql)
-	fmt.Printf("result: %v", result)
+			as '%s'`, functionName, paramStr, path)
+	_, err = db.Exec(sql)
 	if err != nil {
-		return err
+		log.Fatal("Failed to create function: " + err.Error())
 	}
-
-	return nil
 }
 
 func GetSnowflakeFunction(functionName string) (notFoundError, generalError error) {
+	functionName = strings.ToUpper(functionName)
+
 	db, err := sql.Open("snowflake", "")
 	if err != nil {
 		return nil, err
 	}
 	defer db.Close()
-	sqlStatement := `SHOW EXTERNAL FUNCTIONS` //todo
-	_, err = db.Query(sqlStatement)
-	switch err {
-	case sql.ErrNoRows:
-		fmt.Println("No rows were returned!")
+	sqlStatement := fmt.Sprintf(`select function_name from information_schema.functions where function_name like '%s'`, functionName)
+	var resultInterface interface{}
+	err = db.QueryRow(sqlStatement).Scan(&resultInterface)
+	if err == sql.ErrNoRows || resultInterface == nil {
 		return err, nil
-	case nil:
-		return nil, nil
-	default:
+	}
+
+	if err != nil {
 		return nil, err
 	}
+	return nil, nil
 }
 
 func manageSnowflakeFunction(functionName string, status StatusResult) {

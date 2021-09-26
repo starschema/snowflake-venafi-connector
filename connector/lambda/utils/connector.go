@@ -48,7 +48,7 @@ func NewVenafiConnector(configParams ConfigParameters) (*venafiConnector, error)
 
 	client, err := vcert.NewClient(config)
 	if err != nil {
-		log.Errorf("Failed to create venafi connector")
+		log.Errorf("Failed to create venafi connector: %v", err)
 		return &venafiConnector{}, nil
 	}
 	return &venafiConnector{

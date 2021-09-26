@@ -13,13 +13,15 @@ import (
 	"path/filepath"
 	"strings"
 
+	"github.com/aws/aws-sdk-go-v2/service/apigateway"
+	"github.com/aws/aws-sdk-go-v2/service/iam"
 	"github.com/aws/aws-sdk-go-v2/service/lambda"
+	"github.com/aws/aws-sdk-go-v2/service/s3"
 )
 
-func Install() {
-	config, _, s3Client, lambdaClient, iamClient, gatewayClient := bootstrapOperation(0)
+func Install(config ConfigOptions, s3Client *s3.Client, lambdaClient *lambda.Client, iamClient *iam.Client, gatewayClient *apigateway.Client, accountId string) {
 	Log(true, "Getting service status", 0)
-	status := GetStatus(1)
+	status := GetStatus(1, config, s3Client, lambdaClient, iamClient, gatewayClient, accountId)
 
 	if status.AwsConnection.State != 1 || status.AwsCredentials.State != 1 {
 		log.Println("Failed to connection to AWS. Please check the configuration.\n\nStatus:\r")
@@ -62,50 +64,103 @@ func Install() {
 	} else {
 		Log(true, "S3 Lambda role already exists\n", 1)
 	}
-
-	// if status.AwsLambdaSnowflakeRole.State != 1 {
-	// 	createRoleError := CreateAWSExecutionRole(iamClient)
-	// 	if createRoleError != nil {
-	// 		log.Fatalf("Failed to create role in AWS: " + createRoleError.Error())
-	// 	}
-	// } else {
-	// 	Log(true, "Lambda Snowflake Execution role already exists\n", 1)
-	//}
+	externalRole := "Venafi-full-access-to-s3-and-lambda"
+	if status.AwsLambdaSnowflakeRole.State != 1 {
+		createRoleError := CreateExternalLambdaRole(iamClient, externalRole)
+		if createRoleError != nil {
+			log.Fatalf("Failed to create role in AWS: " + createRoleError.Error())
+		}
+	} else {
+		Log(true, "Lambda Snowflake Execution role already exists\n", 1)
+	}
 	Log(true, "Finished installing roles", 1)
 
-	Log(true, "3. Deploying AWS Lambdas ... ", 1)
-	if status.AwsLambdas.State != 1 {
+	var endpointUrl string
+	var err error
+	var restApiID string
+	var parentResourceID string
+	if status.AwsLambdas.State != 1 || status.SnowflakeFunctions.State != 1 {
+		Log(true, "3. Deploying AWS Lambdas and API Gateway ... ", 1)
+
+		parentResourceID, restApiID, endpointUrl, err = CreateRestAPI(gatewayClient, externalRole, accountId, config)
+		if err != nil {
+			log.Fatalf("Failed to create API Integration: " + err.Error())
+		}
+
 		zipContent := createAwsLambdaZip()
-		manageAwsLambda(LAMBDA_FUNCTION_NAME_GETMACHINEID, status.AwsLambas_Details.GetMachineId, lambdaClient, zipContent)
-		manageAwsLambda(LAMBDA_FUNCTION_NAME_REQUESTMACHINEID, status.AwsLambas_Details.GetMachineId, lambdaClient, zipContent)
-		manageAwsLambda(LAMBDA_FUNCTION_NAME_LISTMACHINEIDS, status.AwsLambas_Details.GetMachineId, lambdaClient, zipContent)
-		manageAwsLambda(LAMBDA_FUNCTION_NAME_RENEWMACHINEID, status.AwsLambas_Details.GetMachineId, lambdaClient, zipContent)
-		manageAwsLambda(LAMBDA_FUNCTION_NAME_REVOKEMACHINEID, status.AwsLambas_Details.GetMachineId, lambdaClient, zipContent)
-		manageAwsLambda(LAMBDA_FUNCTION_NAME_GETMACHINEIDSTATUS, status.AwsLambas_Details.GetMachineId, lambdaClient, zipContent)
-		Log(true, "Created all lambda functions\n", 1)
+		manageAwsLambda(LAMBDA_FUNCTION_NAME_GETMACHINEID, status.AwsLambas_Details.GetMachineId, lambdaClient, zipContent, restApiID, config.Aws.Zone, accountId)
+		manageAwsLambda(LAMBDA_FUNCTION_NAME_REQUESTMACHINEID, status.AwsLambas_Details.RequestMachineId, lambdaClient, zipContent, restApiID, config.Aws.Zone, accountId)
+		manageAwsLambda(LAMBDA_FUNCTION_NAME_LISTMACHINEIDS, status.AwsLambas_Details.ListMachineIds, lambdaClient, zipContent, restApiID, config.Aws.Zone, accountId)
+		manageAwsLambda(LAMBDA_FUNCTION_NAME_RENEWMACHINEID, status.AwsLambas_Details.RenewMachineId, lambdaClient, zipContent, restApiID, config.Aws.Zone, accountId)
+		manageAwsLambda(LAMBDA_FUNCTION_NAME_REVOKEMACHINEID, status.AwsLambas_Details.RevokeMachineId, lambdaClient, zipContent, restApiID, config.Aws.Zone, accountId)
+		manageAwsLambda(LAMBDA_FUNCTION_NAME_GETMACHINEIDSTATUS, status.AwsLambas_Details.GetMachineIdStatus, lambdaClient, zipContent, restApiID, config.Aws.Zone, accountId)
+
+		err := IntegrateLambdaWithRestApi(gatewayClient, restApiID, parentResourceID, LAMBDA_FUNCTION_NAME_GETMACHINEID, accountId, config.Aws.Zone)
+		if err != nil {
+			log.Fatalf("Failed to integrate Lambda: %s : " + LAMBDA_FUNCTION_NAME_GETMACHINEID + "Error: " + err.Error())
+		}
+
+		err = IntegrateLambdaWithRestApi(gatewayClient, restApiID, parentResourceID, LAMBDA_FUNCTION_NAME_REQUESTMACHINEID, accountId, config.Aws.Zone)
+		if err != nil {
+			log.Fatalf("Failed to integrate Lambda: " + LAMBDA_FUNCTION_NAME_REQUESTMACHINEID + "Error: " + err.Error())
+		}
+
+		err = IntegrateLambdaWithRestApi(gatewayClient, restApiID, parentResourceID, LAMBDA_FUNCTION_NAME_LISTMACHINEIDS, accountId, config.Aws.Zone)
+		if err != nil {
+			log.Fatalf("Failed to integrate Lambda: " + LAMBDA_FUNCTION_NAME_LISTMACHINEIDS + "Error: " + err.Error())
+		}
+
+		err = IntegrateLambdaWithRestApi(gatewayClient, restApiID, parentResourceID, LAMBDA_FUNCTION_NAME_RENEWMACHINEID, accountId, config.Aws.Zone)
+		if err != nil {
+			log.Fatalf("Failed to integrate Lambda: " + LAMBDA_FUNCTION_NAME_RENEWMACHINEID + "Error: " + err.Error())
+		}
+
+		err = IntegrateLambdaWithRestApi(gatewayClient, restApiID, parentResourceID, LAMBDA_FUNCTION_NAME_REVOKEMACHINEID, accountId, config.Aws.Zone)
+		if err != nil {
+			log.Fatalf("Failed to integrate Lambda: " + LAMBDA_FUNCTION_NAME_RENEWMACHINEID + "Error: " + err.Error())
+		}
+
+		err = IntegrateLambdaWithRestApi(gatewayClient, restApiID, parentResourceID, LAMBDA_FUNCTION_NAME_GETMACHINEIDSTATUS, accountId, config.Aws.Zone)
+		if err != nil {
+			log.Fatalf("Failed to integrate Lambda: " + LAMBDA_FUNCTION_NAME_GETMACHINEIDSTATUS + "Error: " + err.Error())
+			// }
+			Log(true, "Created all lambda functions\n", 1)
+		} else {
+			Log(true, "All Lambdas exists already\n", 1)
+		}
+
+		err = DeployRestAPI(gatewayClient, restApiID)
+		if err != nil {
+			log.Fatalf("Failed to deploy Rest API")
+		}
+
 	} else {
-		Log(true, "All Lambdas exists already\n", 1)
+		Log(true, "3. AWS Lambdas are ready ", 1)
 	}
+	if status.SnowflakeFunctions.State != 120 { // TODO
+		Log(true, "Deploying Snowflake API Integration and External Functions ... ", 0)
 
-	Log(true, "4. Deploying Snowflake API Integration and External Functions ... ", 1)
-	endpointUrl, err := CreateRestAPI(gatewayClient)
-	if err != nil {
-		log.Fatalf("Failed to create API Integration: " + err.Error())
-	}
+		Log(true, "1. Deploying Snowflake API Integration and External Functions ... ", 1)
+		externalID, policyARN, err := CreateSnowflakeApiIntegration("SNOWFLAKE_TEST_INT", fmt.Sprintf("arn:aws:iam::%s:role/%s", accountId, externalRole), endpointUrl)
+		if err != nil {
+			log.Fatalf("Failed to create Snowflake API Integration: " + err.Error())
+		}
 
-	_, _, err = CreateSnowflakeApiIntegration("SNOWFLAKE_TEST_INT", "arn:aws:iam::300480681691:role/venafi-snowflake-connector-dev-eu-west-1-lambdaRole", endpointUrl)
-	if err != nil {
-		log.Fatalf("Failed to create Snowflake API Integration: " + err.Error())
-	}
+		Log(true, "2. Attach AWS policies to Snowflake Integration ... ", 1)
+		err = AttachSnowflakePropertiesToPolicy(iamClient, externalRole, externalID, policyARN)
+		if err != nil {
+			log.Fatal("Failed to add permission for Snowflake to use AWS Lambda + ", err.Error())
+		}
 
-	if status.SnowflakeFunctions.State != 1 { // TODO
-		// CreateSnowflakeFunction(LAMBDA_FUNCTION_NAME_GETMACHINEID, "", "")
-		// CreateSnowflakeFunction(LAMBDA_FUNCTION_NAME_REQUESTMACHINEID, "", "")
-		// CreateSnowflakeFunction(LAMBDA_FUNCTION_NAME_LISTMACHINEIDS, "", "")
-		// CreateSnowflakeFunction(LAMBDA_FUNCTION_NAME_RENEWMACHINEID, "", "")
-		// CreateSnowflakeFunction(LAMBDA_FUNCTION_NAME_RENEWMACHINEID, "", "")
-		// CreateSnowflakeFunction(LAMBDA_FUNCTION_NAME_REVOKEMACHINEID, "", "")
-		// CreateSnowflakeFunction(LAMBDA_FUNCTION_NAME_GETMACHINEIDSTATUS, "", "")
+		Log(true, "2. Create Snowflake External Functions ... ", 1)
+
+		CreateSnowflakeFunction(SNOWFLAKE_FUNCTION_NAME_GETMACHINEID, endpointUrl)
+		CreateSnowflakeFunction(SNOWFLAKE_FUNCTION_NAME_REQUESTMACHINEID, endpointUrl)
+		CreateSnowflakeFunction(SNOWFLAKE_FUNCTION_NAME_LISTMACHINEIDS, endpointUrl)
+		CreateSnowflakeFunction(SNOWFLAKE_FUNCTION_NAME_RENEWMACHINEID, endpointUrl)
+		CreateSnowflakeFunction(SNOWFLAKE_FUNCTION_NAME_RENEWMACHINEID, endpointUrl)
+		CreateSnowflakeFunction(SNOWFLAKE_FUNCTION_NAME_REVOKEMACHINEID, endpointUrl)
+		CreateSnowflakeFunction(SNOWFLAKE_FUNCTION_NAME_GETMACHINEIDSTATUS, endpointUrl)
 		Log(true, "Created all Snowflake External Functions\n", 1)
 	} else {
 		Log(true, "Api Integration and Snowflake Functions are ready\n", 1)
@@ -156,7 +211,7 @@ func createAwsLambdaZip() []byte {
 
 }
 
-func manageAwsLambda(functionName string, status StatusResult, lambdaClient *lambda.Client, zipContent []byte) {
+func manageAwsLambda(functionName string, status StatusResult, lambdaClient *lambda.Client, zipContent []byte, restApiID string, zone string, accountId string) {
 	if status.State < 2 {
 		return
 	}
@@ -170,7 +225,7 @@ func manageAwsLambda(functionName string, status StatusResult, lambdaClient *lam
 	}
 
 	if status.State == 3 || status.State == 2 {
-		err := CreateLambdaFunction(lambdaClient, name, strings.Replace(functionName, "-", "", 0), zipContent)
+		err := CreateLambdaFunction(lambdaClient, name, strings.Replace(functionName, "-", "", 0), zipContent, restApiID, zone, accountId)
 		if err != nil {
 			log.Fatalf("Failed to create function '%v': " + err.Error())
 		}

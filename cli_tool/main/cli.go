@@ -51,11 +51,15 @@ func main() {
 			},
 		},
 	}
+	config, _, s3Client, lambdaClient, iamClient, gatewayClient, stsClient := bootstrapOperation(0)
+	accountID, err := GetCallerIdentity(stsClient)
+	if err != nil {
+		log.Fatal("Failed to get account id")
+	}
 	SetConfig(c)
+	PrintStatus(GetStatus(0, config, s3Client, lambdaClient, iamClient, gatewayClient, accountID))
 
-	PrintStatus(GetStatus(0))
-
-	Install()
+	Install(config, s3Client, lambdaClient, iamClient, gatewayClient, accountID)
 	fmt.Print("over")
 }
 

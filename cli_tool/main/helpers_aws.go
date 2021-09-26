@@ -20,16 +20,17 @@ import (
 	lambdaTypes "github.com/aws/aws-sdk-go-v2/service/lambda/types"
 	"github.com/aws/aws-sdk-go-v2/service/s3"
 	"github.com/aws/aws-sdk-go-v2/service/s3/types"
+	"github.com/aws/aws-sdk-go-v2/service/sts"
 )
 
 const S3_CRED_FILE_NAME = "credentials.json"
 const LAMBDA_FUNCTION_NAME_PREFIX = "venafi-snowlake-func-"
-const LAMBDA_FUNCTION_NAME_GETMACHINEID = "get-machine-id"
-const LAMBDA_FUNCTION_NAME_REQUESTMACHINEID = "request-machine-id"
-const LAMBDA_FUNCTION_NAME_LISTMACHINEIDS = "list-machine-ids"
-const LAMBDA_FUNCTION_NAME_RENEWMACHINEID = "renew-machine-ids"
-const LAMBDA_FUNCTION_NAME_REVOKEMACHINEID = "revoke-machine-ids"
-const LAMBDA_FUNCTION_NAME_GETMACHINEIDSTATUS = "get-machine-id-status"
+const LAMBDA_FUNCTION_NAME_GETMACHINEID = "getmachineid"
+const LAMBDA_FUNCTION_NAME_REQUESTMACHINEID = "requestmachineid"
+const LAMBDA_FUNCTION_NAME_LISTMACHINEIDS = "listmachineids"
+const LAMBDA_FUNCTION_NAME_RENEWMACHINEID = "renewmachineid"
+const LAMBDA_FUNCTION_NAME_REVOKEMACHINEID = "revokemachineid"
+const LAMBDA_FUNCTION_NAME_GETMACHINEIDSTATUS = "getmachineidstatus"
 
 func GetAwsConfig(awsConfig AwsOptions) aws.Config {
 
@@ -41,6 +42,15 @@ func GetAwsConfig(awsConfig AwsOptions) aws.Config {
 		LogFatal("%v", err)
 	}
 	return cfg
+}
+
+func GetCallerIdentity(svc *sts.Client) (string, error) {
+	input := &sts.GetCallerIdentityInput{}
+	result, err := svc.GetCallerIdentity(context.TODO(), input)
+	if err != nil {
+		return "", err
+	}
+	return *result.Account, nil
 }
 
 func GetBucket(svc *s3.Client, bucketName string) (bucket []types.Object, credsInvalid bool, bucketNotFound bool, err error) {
@@ -127,17 +137,36 @@ func DeleteLambdaFunction(svc *lambda.Client, functionName string) error {
 	})
 	return err
 }
-func CreateLambdaFunction(svc *lambda.Client, functionName string, binaryName string, zipContent []byte) error {
+func CreateLambdaFunction(svc *lambda.Client, functionName string, binaryName string, zipContent []byte, restAPIID string, zone string, accountID string) error {
+	sourceARN := fmt.Sprintf("arn:aws:execute-api:%s:%s:%s/*/*", zone, accountID, restAPIID)
+	envVariables := make(map[string]string)
+	envVariables["ZONE"] = "eu-west-1"
+	envVariables["CREDENTIAL_FILE_NAME"] = "credentials.json"
+	envVariables["S3_BUCKET"] = "venafi-credentials"
 	_, err := svc.CreateFunction(context.TODO(), &lambda.CreateFunctionInput{
 		FunctionName: aws.String(functionName),
-		Role:         aws.String("arn:aws:iam::300480681691:role/Venafi-full-access-to-s3-and-lambda"),
+		Role:         aws.String(fmt.Sprintf("arn:aws:iam::%s:role/venafi-test-access", accountID)), //TODO
 		Code: &lambdaTypes.FunctionCode{
 			ZipFile: zipContent,
 		},
-		Runtime: lambdaTypes.RuntimeGo1x,
-		Handler: aws.String(binaryName),
+		Runtime:     lambdaTypes.RuntimeGo1x,
+		Handler:     aws.String(binaryName),
+		Environment: &lambdaTypes.Environment{Variables: envVariables},
+		Timeout:     aws.Int32(30)})
+	if err != nil {
+		return err
+	}
+	_, err = svc.AddPermission(context.TODO(), &lambda.AddPermissionInput{
+		FunctionName: aws.String(functionName),
+		Action:       aws.String("lambda:InvokeFunction"),
+		Principal:    aws.String("apigateway.amazonaws.com"),
+		SourceArn:    aws.String(sourceARN),
+		StatementId:  aws.String(fmt.Sprintf("%s-policy", functionName)),
 	})
-	return err
+	if err != nil {
+		return err
+	}
+	return nil
 }
 
 func GetLambdaRole(svc *iam.Client, roleName string) StatusResult {
@@ -217,97 +246,133 @@ func CreateLambdaS3Role(svc *iam.Client, roleName string) error {
 	return nil // TODO MORE MEANINGFUL ERRORS
 }
 
-// func CreateAWSExecutionRole(svc *iam.Client) error {
-// 	_, err := svc.CreateRole(context.TODO(), &iam.CreateRoleInput{
-// 		RoleName:    aws.String("snowflake-execute"),
-// 		Description: aws.String("Execution Role for AWS Lambdas to access S3"),
-// 		AssumeRolePolicyDocument: aws.String(`{
-// 			"Version": "2012-10-17",
-// 			"Statement": [
-// 				{
-// 					"Effect": "Allow",
-// 					"Principal": {
-// 						"AWS": "arn:aws:sts::300480681691:assumed-role/snowflake-execute/snowflake"
-// 					},
-// 					"Action": "execute-api:Invoke"
-// 				}
-// 			]
-// 		}`),
-// 	})
-// 	if err != nil {
-// 		return err
-// 	}
+func CreateExternalLambdaRole(svc *iam.Client, roleName string) error {
+	_, err := svc.CreateRole(context.TODO(), &iam.CreateRoleInput{
+		RoleName:    aws.String(roleName),
+		Description: aws.String("Execution Role for Snowflake to run AWS Lambda"),
+		AssumeRolePolicyDocument: aws.String(`{
+			"Version": "2012-10-17",
+			"Statement": [
+			  {
+				"Effect": "Allow",
+				"Principal": {
+				  "Service": ["lambda.amazonaws.com", "apigateway.amazonaws.com"]
+				},
+				"Action": [
+				  "sts:AssumeRole"
+				]
+			  }]
+		  }`),
+	}) // empty role. we will later attach snowflake policy here.
 
-// 	return nil // TODO MORE MEANINGFUL ERRORS
-// }
+	return err // TODO MORE MEANINGFUL ERRORS
+}
 
-func CreateRestAPI(svc *apigateway.Client) (string, error) {
+func AttachSnowflakePropertiesToPolicy(svc *iam.Client, roleName string, externalID string, awsUserARN string) error {
+	policiyStr := fmt.Sprintf(`{
+		"Version": "2012-10-17",
+		"Statement": [
+			{
+				"Effect": "Allow",
+				"Principal": {
+					"AWS": "%s"
+				},
+				"Action": "sts:AssumeRole",
+				"Condition": {
+					"StringEquals": {
+						"sts:ExternalId": "%s"
+					}
+				}
+			}
+		]
+	}`, awsUserARN, externalID)
+	_, err := svc.UpdateAssumeRolePolicy(context.TODO(), &iam.UpdateAssumeRolePolicyInput{
+		RoleName:       aws.String(roleName),
+		PolicyDocument: aws.String(policiyStr),
+	}) // access to cloudwatch logs
+	if err != nil {
+		return err
+	}
+
+	return nil // TODO MORE MEANINGFUL ERRORS
+}
+
+func CreateRestAPI(svc *apigateway.Client, role, accountId string, config ConfigOptions) (string, string, string, error) {
+	principalStr := fmt.Sprintf(`{
+		"Version": "2012-10-17",
+		"Statement": [
+			{
+				"Effect": "Allow",
+				"Principal": {
+					"AWS": "arn:aws:sts::%s:assumed-role/%s/snowflake"
+				},
+				"Action": "execute-api:Invoke",
+				"Resource": "arn:aws:execute-api:%s:%s:*/dev/POST/*"
+			}
+		]
+	}`, accountId, role, config.Aws.Zone, accountId)
+
 	values, err := svc.CreateRestApi(context.TODO(), &apigateway.CreateRestApiInput{
 		Name:                  aws.String("venafi-snowflake-func-test2"),
 		Description:           aws.String("Api Gateway for AWS Lambda Venafi Functions"),
 		EndpointConfiguration: &gatewayTypes.EndpointConfiguration{Types: []gatewayTypes.EndpointType{gatewayTypes.EndpointTypeRegional}},
-		Policy: aws.String(`{
-			"Version": "2012-10-17",
-			"Statement": [
-				{
-					"Effect": "Allow",
-					"Principal": {
-						"AWS": "arn:aws:sts::300480681691:assumed-role/venafi-snowflake-connector-dev-eu-west-1-lambdaRole/snowflake"
-					},
-					"Action": "execute-api:Invoke",
-					"Resource": "arn:aws:execute-api:eu-west-1:300480681691:*/dev/POST/*"
-				}
-			]
-		}`),
+		Policy:                aws.String(principalStr),
 	})
 	if err != nil {
-		return "", err
+		return "", "", "", err
 	}
-	fmt.Printf("!!!VALIES: %v", *values.Id)
 	parentResource, err := svc.GetResources(context.TODO(), &apigateway.GetResourcesInput{
 		RestApiId: aws.String(*values.Id),
 	})
 	if err != nil {
-		return "", err
+		return "", "", "", err
 	}
+	endpointUrl := fmt.Sprintf("https://%s.execute-api.%s.amazonaws.com/dev/", *values.Id, config.Aws.Zone)
+	return *parentResource.Items[0].Id, *values.Id, endpointUrl, nil
+}
+
+func IntegrateLambdaWithRestApi(svc *apigateway.Client, restApiID, parentResourceID, functionName, accountId, zone string) error {
+	uriStr := fmt.Sprintf("arn:aws:apigateway:%s:lambda:path/2015-03-31/functions/arn:aws:lambda:%s:%s:function:venafi-snowlake-func-%s/invocations", zone, zone, accountId, functionName)
 	resource, err := svc.CreateResource(context.TODO(), &apigateway.CreateResourceInput{
-		RestApiId: aws.String(*values.Id),
-		ParentId:  aws.String(*parentResource.Items[0].Id),
-		PathPart:  aws.String("getmachineid"),
+		RestApiId: aws.String(restApiID),
+		ParentId:  aws.String(parentResourceID),
+		PathPart:  aws.String(functionName),
 	})
 	if err != nil {
-		return "", err
+		return err
 	}
 	_, err = svc.PutMethod(context.TODO(), &apigateway.PutMethodInput{
 		AuthorizationType: aws.String("AWS_IAM"),
 		HttpMethod:        aws.String("POST"),
 		ResourceId:        aws.String(*resource.Id),
-		RestApiId:         aws.String(*values.Id),
+		RestApiId:         aws.String(restApiID),
 	})
 	if err != nil {
-		return "", err
+		return err
 	}
 	_, err = svc.PutIntegration(context.TODO(), &apigateway.PutIntegrationInput{
-		RestApiId:             aws.String(*values.Id),
+		RestApiId:             aws.String(restApiID),
 		ResourceId:            resource.Id,
 		IntegrationHttpMethod: aws.String("POST"),
 		HttpMethod:            aws.String("POST"),
 		// RequestParameters:     map[string]string{"type": "string", "tpp_url": "string", "request_id": "string"},
 		Type: gatewayTypes.IntegrationTypeAwsProxy,
-		Uri:  aws.String("arn:aws:apigateway:us-west-1:lambda:path/2015-03-31/functions/arn:aws:lambda:eu-west-1:300480681691:function:venafi-snowlake-func-get-machine-id/invocations"),
+		Uri:  aws.String(uriStr),
 	})
 	if err != nil {
-		return "", err
+		return err
 	}
 
-	_, err = svc.CreateDeployment(context.TODO(), &apigateway.CreateDeploymentInput{
-		RestApiId: aws.String(*values.Id),
+	return nil
+}
+
+func DeployRestAPI(svc *apigateway.Client, restApiID string) error {
+	_, err := svc.CreateDeployment(context.TODO(), &apigateway.CreateDeploymentInput{
+		RestApiId: aws.String(restApiID),
 		StageName: aws.String("dev"),
 	})
 	if err != nil {
-		return "", err
+		return err
 	}
-	endpointUrl := fmt.Sprintf("https://%s.execute-api.eu-west-1.amazonaws.com/dev/", *values.Id)
-	fmt.Printf("RestApi: %v", fmt.Sprintf("https://%s.execute-api.eu-west-1.amazonaws.com/dev/", *values.Id))
-	return endpointUrl, nil
+	return nil
 }
