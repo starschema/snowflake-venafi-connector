@@ -65,7 +65,7 @@ func GetAccessToken(tpp_url string) (string, error) {
 	var access_token string
 	var found_token bool
 	for _, x := range credentialArray {
-		if x["url"] == tpp_url {
+		if x["Url"] == tpp_url {
 			expiritation_time, found_exp := x["AccessTokenExpires"]
 			access_token, found_token = x["AccessToken"]
 			layout := "2006-01-02T15:04:05.000Z"
@@ -86,7 +86,6 @@ func GetAccessToken(tpp_url string) (string, error) {
 				log.Infof("Found token is valid, no need to return new token.")
 				break
 			}
-			break
 		}
 	}
 	return access_token, nil
@@ -98,7 +97,7 @@ func CheckIfAccessTokenIsValid(access_token_expiration time.Time) bool {
 
 func GetNewAccessToken(single_credential_for_tpp map[string]string) *map[string]string {
 
-	c, err := tpp.NewConnector(single_credential_for_tpp["url"], "", false, nil)
+	c, err := tpp.NewConnector(single_credential_for_tpp["Url"], "", false, nil)
 	if err != nil {
 		log.Errorf("Failed to create TPP Connector: %v", err.Error())
 		return nil

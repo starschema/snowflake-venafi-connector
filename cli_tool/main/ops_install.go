@@ -81,12 +81,12 @@ func Install(config ConfigOptions, s3Client *s3.Client, lambdaClient *lambda.Cli
 		}
 
 		zipContent := createAwsLambdaZip()
-		manageAwsLambda(LAMBDA_FUNCTION_NAME_GETMACHINEID, status.AwsLambas_Details.GetMachineId, lambdaClient, zipContent, restApiID, config.Aws.Zone, accountId)
-		manageAwsLambda(LAMBDA_FUNCTION_NAME_REQUESTMACHINEID, status.AwsLambas_Details.RequestMachineId, lambdaClient, zipContent, restApiID, config.Aws.Zone, accountId)
-		manageAwsLambda(LAMBDA_FUNCTION_NAME_LISTMACHINEIDS, status.AwsLambas_Details.ListMachineIds, lambdaClient, zipContent, restApiID, config.Aws.Zone, accountId)
-		manageAwsLambda(LAMBDA_FUNCTION_NAME_RENEWMACHINEID, status.AwsLambas_Details.RenewMachineId, lambdaClient, zipContent, restApiID, config.Aws.Zone, accountId)
-		manageAwsLambda(LAMBDA_FUNCTION_NAME_REVOKEMACHINEID, status.AwsLambas_Details.RevokeMachineId, lambdaClient, zipContent, restApiID, config.Aws.Zone, accountId)
-		manageAwsLambda(LAMBDA_FUNCTION_NAME_GETMACHINEIDSTATUS, status.AwsLambas_Details.GetMachineIdStatus, lambdaClient, zipContent, restApiID, config.Aws.Zone, accountId)
+		manageAwsLambda(LAMBDA_FUNCTION_NAME_GETMACHINEID, status.AwsLambas_Details.GetMachineId, lambdaClient, zipContent, restApiID, config.Aws.Zone, accountId, config.Aws.Bucket)
+		manageAwsLambda(LAMBDA_FUNCTION_NAME_REQUESTMACHINEID, status.AwsLambas_Details.RequestMachineId, lambdaClient, zipContent, restApiID, config.Aws.Zone, accountId, config.Aws.Bucket)
+		manageAwsLambda(LAMBDA_FUNCTION_NAME_LISTMACHINEIDS, status.AwsLambas_Details.ListMachineIds, lambdaClient, zipContent, restApiID, config.Aws.Zone, accountId, config.Aws.Bucket)
+		manageAwsLambda(LAMBDA_FUNCTION_NAME_RENEWMACHINEID, status.AwsLambas_Details.RenewMachineId, lambdaClient, zipContent, restApiID, config.Aws.Zone, accountId, config.Aws.Bucket)
+		manageAwsLambda(LAMBDA_FUNCTION_NAME_REVOKEMACHINEID, status.AwsLambas_Details.RevokeMachineId, lambdaClient, zipContent, restApiID, config.Aws.Zone, accountId, config.Aws.Bucket)
+		manageAwsLambda(LAMBDA_FUNCTION_NAME_GETMACHINEIDSTATUS, status.AwsLambas_Details.GetMachineIdStatus, lambdaClient, zipContent, restApiID, config.Aws.Zone, accountId, config.Aws.Bucket)
 
 		err := IntegrateLambdaWithRestApi(gatewayClient, restApiID, parentResourceID, LAMBDA_FUNCTION_NAME_GETMACHINEID, accountId, config.Aws.Zone)
 		if err != nil {
@@ -207,7 +207,7 @@ func createAwsLambdaZip() []byte {
 
 }
 
-func manageAwsLambda(functionName string, status StatusResult, lambdaClient *lambda.Client, zipContent []byte, restApiID string, zone string, accountId string) {
+func manageAwsLambda(functionName string, status StatusResult, lambdaClient *lambda.Client, zipContent []byte, restApiID string, zone string, accountId string, bucket string) {
 	if status.State < 2 {
 		return
 	}
@@ -221,7 +221,7 @@ func manageAwsLambda(functionName string, status StatusResult, lambdaClient *lam
 	}
 
 	if status.State == 3 || status.State == 2 {
-		err := CreateLambdaFunction(lambdaClient, name, strings.Replace(functionName, "-", "", 0), zipContent, restApiID, zone, accountId)
+		err := CreateLambdaFunction(lambdaClient, name, strings.Replace(functionName, "-", "", 0), zipContent, restApiID, zone, accountId, bucket)
 		if err != nil {
 			log.Fatalf("Failed to create function '%v': " + err.Error())
 		}

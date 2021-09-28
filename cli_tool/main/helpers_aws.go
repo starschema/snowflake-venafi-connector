@@ -139,12 +139,12 @@ func DeleteLambdaFunction(svc *lambda.Client, functionName string) error {
 	})
 	return err
 }
-func CreateLambdaFunction(svc *lambda.Client, functionName string, binaryName string, zipContent []byte, restAPIID string, zone string, accountID string) error {
+func CreateLambdaFunction(svc *lambda.Client, functionName string, binaryName string, zipContent []byte, restAPIID string, zone string, accountID string, bucket string) error {
 	sourceARN := fmt.Sprintf("arn:aws:execute-api:%s:%s:%s/*/*", zone, accountID, restAPIID)
 	envVariables := make(map[string]string)
-	envVariables["ZONE"] = "eu-west-1"
+	envVariables["ZONE"] = zone
 	envVariables["CREDENTIAL_FILE_NAME"] = "credentials.json"
-	envVariables["S3_BUCKET"] = "venafi-credentials"
+	envVariables["S3_BUCKET"] = bucket
 	_, err := svc.CreateFunction(context.TODO(), &lambda.CreateFunctionInput{
 		FunctionName: aws.String(functionName),
 		Role:         aws.String(fmt.Sprintf("arn:aws:iam::%s:role/Venafi-full-access-to-s3-and-lambda", accountID)), //TODO
