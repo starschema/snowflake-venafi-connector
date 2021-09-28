@@ -3,6 +3,7 @@ module cli_tool
 go 1.16
 
 require (
+	github.com/Venafi/vcert/v4 v4.15.1 // indirect
 	github.com/aws/aws-sdk-go v1.40.44
 	github.com/aws/aws-sdk-go-v2 v1.9.0
 	github.com/aws/aws-sdk-go-v2/config v1.8.1

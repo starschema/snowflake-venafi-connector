@@ -16,8 +16,14 @@ const SNOWFLAKE_FUNCTION_NAME_RENEWMACHINEID = "renewmachineid"
 const SNOWFLAKE_FUNCTION_NAME_REVOKEMACHINEID = "revokemachineid"
 const SNOWFLAKE_FUNCTION_NAME_GETMACHINEIDSTATUS = "getmachineidstatus"
 
-func CheckSnowflakeConnection() error {
-	db, err := sql.Open("snowflake", "")
+func getConnectionStringFromParams(username, password, account, warehouse, database, schema, role string) string {
+	return fmt.Sprintf("%s:%s@%s-%s/%s/%s?my_warehouse=%s&role=%s", username, "7^kJuS!$QLVzPy~_", account, account, database, schema, warehouse, role)
+}
+
+func CheckSnowflakeConnection(conf SnowflakeOptions) error {
+	connStr := getConnectionStringFromParams(conf.Username, conf.Password, conf.Account, conf.Warehouse, conf.Database, conf.Schema, conf.Role)
+
+	db, err := sql.Open("snowflake", connStr)
 	if err != nil {
 		return err
 	}
@@ -25,8 +31,9 @@ func CheckSnowflakeConnection() error {
 	return nil
 }
 
-func CreateSnowflakeApiIntegration(integrationName string, awsRoleARN string, endpointUrl string) (externalID string, iamARN string, err error) {
-	db, err := sql.Open("snowflake", "")
+func CreateSnowflakeApiIntegration(integrationName string, awsRoleARN string, endpointUrl string, conf SnowflakeOptions) (externalID string, iamARN string, err error) {
+	connStr := getConnectionStringFromParams(conf.Username, conf.Password, conf.Account, conf.Warehouse, conf.Database, conf.Schema, conf.Role)
+	db, err := sql.Open("snowflake", connStr)
 	if err != nil {
 		return "", "", err
 	}
@@ -61,8 +68,9 @@ func CreateSnowflakeApiIntegration(integrationName string, awsRoleARN string, en
 	return final["API_AWS_EXTERNAL_ID"], final["API_AWS_IAM_USER_ARN"], nil //TODO qUERY return values
 }
 
-func CreateSnowflakeFunction(functionName string, endpoint string) {
+func CreateSnowflakeFunction(functionName string, endpoint string, conf SnowflakeOptions) {
 	path := endpoint + functionName
+	connStr := getConnectionStringFromParams(conf.Username, conf.Password, conf.Account, conf.Warehouse, conf.Database, conf.Schema, conf.Role)
 	var paramStr string
 	switch functionName {
 	case SNOWFLAKE_FUNCTION_NAME_GETMACHINEID:
@@ -81,7 +89,7 @@ func CreateSnowflakeFunction(functionName string, endpoint string) {
 		fmt.Printf("############## invalid function name: %v", functionName)
 	}
 
-	db, err := sql.Open("snowflake", "")
+	db, err := sql.Open("snowflake", connStr)
 	if err != nil {
 		log.Fatal("Failed to create function: " + err.Error())
 		return
@@ -99,10 +107,10 @@ func CreateSnowflakeFunction(functionName string, endpoint string) {
 	}
 }
 
-func GetSnowflakeFunction(functionName string) (notFoundError, generalError error) {
+func GetSnowflakeFunction(functionName string, conf SnowflakeOptions) (notFoundError, generalError error) {
 	functionName = strings.ToUpper(functionName)
-
-	db, err := sql.Open("snowflake", "")
+	connStr := getConnectionStringFromParams(conf.Username, conf.Password, conf.Account, conf.Warehouse, conf.Database, conf.Schema, conf.Role)
+	db, err := sql.Open("snowflake", connStr)
 	if err != nil {
 		return nil, err
 	}
@@ -127,7 +135,7 @@ func manageSnowflakeFunction(functionName string, status StatusResult) {
 }
 
 func getSnowflakeFunctionStatus(conf SnowflakeOptions, functionName string, state *FunctionCheckState) StatusResult {
-	notFoundErr, generalErr := GetSnowflakeFunction(functionName)
+	notFoundErr, generalErr := GetSnowflakeFunction(functionName, conf)
 	if notFoundErr != nil {
 		state.AnyMissing = true
 		return StatusResult{State: 3, Error: notFoundErr}

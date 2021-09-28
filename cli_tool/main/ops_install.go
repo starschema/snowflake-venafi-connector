@@ -64,22 +64,15 @@ func Install(config ConfigOptions, s3Client *s3.Client, lambdaClient *lambda.Cli
 	} else {
 		Log(true, "S3 Lambda role already exists\n", 1)
 	}
-	externalRole := "Venafi-full-access-to-s3-and-lambda"
-	if status.AwsLambdaSnowflakeRole.State != 1 {
-		createRoleError := CreateExternalLambdaRole(iamClient, externalRole)
-		if createRoleError != nil {
-			log.Fatalf("Failed to create role in AWS: " + createRoleError.Error())
-		}
-	} else {
-		Log(true, "Lambda Snowflake Execution role already exists\n", 1)
-	}
+
 	Log(true, "Finished installing roles", 1)
 
 	var endpointUrl string
 	var err error
 	var restApiID string
 	var parentResourceID string
-	if status.AwsLambdas.State != 1 || status.SnowflakeFunctions.State != 1 {
+	externalRole := "Venafi-full-access-to-s3-and-lambda"
+	if status.AwsLambdas.State != 1 {
 		Log(true, "3. Deploying AWS Lambdas and API Gateway ... ", 1)
 
 		parentResourceID, restApiID, endpointUrl, err = CreateRestAPI(gatewayClient, externalRole, accountId, config)
@@ -137,30 +130,33 @@ func Install(config ConfigOptions, s3Client *s3.Client, lambdaClient *lambda.Cli
 	} else {
 		Log(true, "3. AWS Lambdas are ready ", 1)
 	}
-	if status.SnowflakeFunctions.State != 120 { // TODO
+	if status.SnowflakeFunctions.State != 1 {
 		Log(true, "Deploying Snowflake API Integration and External Functions ... ", 0)
 
-		Log(true, "1. Deploying Snowflake API Integration and External Functions ... ", 1)
-		externalID, policyARN, err := CreateSnowflakeApiIntegration("SNOWFLAKE_TEST_INT", fmt.Sprintf("arn:aws:iam::%s:role/%s", accountId, externalRole), endpointUrl)
-		if err != nil {
-			log.Fatalf("Failed to create Snowflake API Integration: " + err.Error())
+		for _, snowflake := range config.Snowflake {
+			Log(true, "1. Deploying Snowflake API Integration and External Functions ... ", 1)
+			externalID, policyARN, err := CreateSnowflakeApiIntegration("SNOWFLAKE_TEST_INT", fmt.Sprintf("arn:aws:iam::%s:role/%s", accountId, externalRole), endpointUrl, snowflake)
+			if err != nil {
+				log.Fatalf("Failed to create Snowflake API Integration: " + err.Error())
+			}
+
+			Log(true, "2. Attach AWS policies to Snowflake Integration ... ", 1)
+			err = AttachSnowflakePropertiesToPolicy(iamClient, externalRole, externalID, policyARN)
+			if err != nil {
+				log.Fatal("Failed to add permission for Snowflake to use AWS Lambda + ", err.Error())
+			}
+
+			Log(true, "2. Create Snowflake External Functions ... ", 1)
+
+			CreateSnowflakeFunction(SNOWFLAKE_FUNCTION_NAME_GETMACHINEID, endpointUrl, snowflake)
+			CreateSnowflakeFunction(SNOWFLAKE_FUNCTION_NAME_REQUESTMACHINEID, endpointUrl, snowflake)
+			CreateSnowflakeFunction(SNOWFLAKE_FUNCTION_NAME_LISTMACHINEIDS, endpointUrl, snowflake)
+			CreateSnowflakeFunction(SNOWFLAKE_FUNCTION_NAME_RENEWMACHINEID, endpointUrl, snowflake)
+			CreateSnowflakeFunction(SNOWFLAKE_FUNCTION_NAME_RENEWMACHINEID, endpointUrl, snowflake)
+			CreateSnowflakeFunction(SNOWFLAKE_FUNCTION_NAME_REVOKEMACHINEID, endpointUrl, snowflake)
+			CreateSnowflakeFunction(SNOWFLAKE_FUNCTION_NAME_GETMACHINEIDSTATUS, endpointUrl, snowflake)
 		}
 
-		Log(true, "2. Attach AWS policies to Snowflake Integration ... ", 1)
-		err = AttachSnowflakePropertiesToPolicy(iamClient, externalRole, externalID, policyARN)
-		if err != nil {
-			log.Fatal("Failed to add permission for Snowflake to use AWS Lambda + ", err.Error())
-		}
-
-		Log(true, "2. Create Snowflake External Functions ... ", 1)
-
-		CreateSnowflakeFunction(SNOWFLAKE_FUNCTION_NAME_GETMACHINEID, endpointUrl)
-		CreateSnowflakeFunction(SNOWFLAKE_FUNCTION_NAME_REQUESTMACHINEID, endpointUrl)
-		CreateSnowflakeFunction(SNOWFLAKE_FUNCTION_NAME_LISTMACHINEIDS, endpointUrl)
-		CreateSnowflakeFunction(SNOWFLAKE_FUNCTION_NAME_RENEWMACHINEID, endpointUrl)
-		CreateSnowflakeFunction(SNOWFLAKE_FUNCTION_NAME_RENEWMACHINEID, endpointUrl)
-		CreateSnowflakeFunction(SNOWFLAKE_FUNCTION_NAME_REVOKEMACHINEID, endpointUrl)
-		CreateSnowflakeFunction(SNOWFLAKE_FUNCTION_NAME_GETMACHINEIDSTATUS, endpointUrl)
 		Log(true, "Created all Snowflake External Functions\n", 1)
 	} else {
 		Log(true, "Api Integration and Snowflake Functions are ready\n", 1)

@@ -31,6 +31,7 @@ type StatusResult struct {
 	// 2 - Error
 	// 3 - PartialError
 	State int
+	Name  string
 	Error error
 }
 type AwsLambdaStatuses struct {
@@ -95,12 +96,11 @@ func GetStatus(tabIndex int, c ConfigOptions, s3Client *s3.Client, lambdaClient 
 		// checkSnowflake(&ret)
 		return ret
 	}
-
 	// Check Roles
 	roleName := "venafi-test-access"
 
 	ret.AwsLambdaS3Role = GetLambdaRole(iamClient, roleName)
-	ret.AwsLambdaSnowflakeRole = GetLambdaRole(iamClient, "venafi-execute-role")
+	// ret.AwsLambdaSnowflakeRole = GetLambdaRole(iamClient, "venafi-execute-role")
 
 	// Check AWS lambas
 	lambda_state := FunctionCheckState{}
@@ -119,28 +119,40 @@ func GetStatus(tabIndex int, c ConfigOptions, s3Client *s3.Client, lambdaClient 
 		ret.AwsLambdas.State = 1
 	}
 
-	err = CheckSnowflakeConnection()
-	if err != nil {
-		ret.SnowflakeConnection.State = 2
-		ret.SnowflakeConnection.Error = err
-	} else {
-		ret.SnowflakeConnection.State = 1
-	}
-
-	// Check Snowflake External Functions
 	snowflake_state := FunctionCheckState{}
-	ret.SnowflakeFunctions_Details.GetMachineId = getSnowflakeFunctionStatus(c.Snowflake[0], SNOWFLAKE_FUNCTION_NAME_GETMACHINEID, &snowflake_state)
-	ret.SnowflakeFunctions_Details.RequestMachineId = getSnowflakeFunctionStatus(c.Snowflake[0], SNOWFLAKE_FUNCTION_NAME_REQUESTMACHINEID, &snowflake_state)
-	ret.SnowflakeFunctions_Details.ListMachineIds = getSnowflakeFunctionStatus(c.Snowflake[0], SNOWFLAKE_FUNCTION_NAME_LISTMACHINEIDS, &snowflake_state)
-	ret.SnowflakeFunctions_Details.RenewMachineId = getSnowflakeFunctionStatus(c.Snowflake[0], SNOWFLAKE_FUNCTION_NAME_RENEWMACHINEID, &snowflake_state)
-	ret.SnowflakeFunctions_Details.RevokeMachineId = getSnowflakeFunctionStatus(c.Snowflake[0], SNOWFLAKE_FUNCTION_NAME_REVOKEMACHINEID, &snowflake_state)
-	ret.SnowflakeFunctions_Details.GetMachineIdStatus = getSnowflakeFunctionStatus(c.Snowflake[0], SNOWFLAKE_FUNCTION_NAME_GETMACHINEIDSTATUS, &snowflake_state)
-	if snowflake_state.AnyError {
-		ret.SnowflakeFunctions.State = 2
-	} else if snowflake_state.AnyMissing {
-		ret.SnowflakeFunctions.State = 3
-	} else {
-		ret.SnowflakeFunctions.State = 1
+	for _, snowflake := range c.Snowflake {
+		ret.SnowflakeConnection.Name = snowflake.Database
+		err = CheckSnowflakeConnection(snowflake)
+		if err != nil {
+			ret.SnowflakeConnection.State = 2
+			ret.SnowflakeConnection.Error = err
+		} else {
+			ret.SnowflakeConnection.State = 1
+		}
+
+		// Check Snowflake External Functions
+		ret.SnowflakeFunctions_Details.GetMachineId = getSnowflakeFunctionStatus(snowflake, SNOWFLAKE_FUNCTION_NAME_GETMACHINEID, &snowflake_state)
+		ret.SnowflakeFunctions_Details.RequestMachineId = getSnowflakeFunctionStatus(snowflake, SNOWFLAKE_FUNCTION_NAME_REQUESTMACHINEID, &snowflake_state)
+		ret.SnowflakeFunctions_Details.ListMachineIds = getSnowflakeFunctionStatus(snowflake, SNOWFLAKE_FUNCTION_NAME_LISTMACHINEIDS, &snowflake_state)
+		ret.SnowflakeFunctions_Details.RenewMachineId = getSnowflakeFunctionStatus(snowflake, SNOWFLAKE_FUNCTION_NAME_RENEWMACHINEID, &snowflake_state)
+		ret.SnowflakeFunctions_Details.RevokeMachineId = getSnowflakeFunctionStatus(snowflake, SNOWFLAKE_FUNCTION_NAME_REVOKEMACHINEID, &snowflake_state)
+		ret.SnowflakeFunctions_Details.GetMachineIdStatus = getSnowflakeFunctionStatus(snowflake, SNOWFLAKE_FUNCTION_NAME_GETMACHINEIDSTATUS, &snowflake_state)
+		if snowflake_state.AnyError {
+			ret.SnowflakeFunctions.State = 2
+		} else if snowflake_state.AnyMissing {
+			ret.SnowflakeFunctions.State = 3
+		} else {
+			ret.SnowflakeFunctions.State = 1
+		}
+		printStatusResult("Snowflake connection", ret.SnowflakeConnection, "Success", "Error", "")
+
+		printStatusResult("Snowflake functions", ret.SnowflakeFunctions, "All Snowflake External Functions are online", "One or more Snowflake functions in error state", "One or more Snowflake functions are missing")
+		printAwsLambdaResult("GetMachineId", ret.SnowflakeFunctions_Details.GetMachineId)
+		printAwsLambdaResult("RequestMachineId", ret.SnowflakeFunctions_Details.RequestMachineId)
+		printAwsLambdaResult("ListMachineIds", ret.SnowflakeFunctions_Details.ListMachineIds)
+		printAwsLambdaResult("RenewMachineId", ret.SnowflakeFunctions_Details.RenewMachineId)
+		printAwsLambdaResult("RevokeMachineId", ret.SnowflakeFunctions_Details.RevokeMachineId)
+		printAwsLambdaResult("GetMachineIdStatus", ret.SnowflakeFunctions_Details.GetMachineIdStatus)
 	}
 
 	return ret
@@ -152,8 +164,8 @@ func PrintStatus(status ServiceStatus) {
 	printStatusResult("AWS Credentials", status.AwsCredentials, "Valid", "Invalid", "")
 	printStatusResult("AWS Bucket", status.AwsBucketFound, "Exists", "Missing", "Exists, credential file not found")
 
-	printStatusResult("AWS Lambda <-> S3 role", status.AwsLambdaS3Role, "Exists", "Failed to check", "Missing")
-	printStatusResult("AWS Lambda <-> SF role", status.AwsLambdaSnowflakeRole, "Exists", "Failed to check", "Missing")
+	printStatusResult("Snowflake <-> AWS Lambda <-> S3 role", status.AwsLambdaS3Role, "Exists", "Failed to check", "Missing")
+	// printStatusResult("AWS Lambda <-> SF role", status.AwsLambdaSnowflakeRole, "Exists", "Failed to check", "Missing")
 
 	printStatusResult("AWS Lambdas", status.AwsLambdas, "All lambdas are online", "One or more lambdas are in error state or missing", "One or more lambdas are missing")
 	printAwsLambdaResult("GetMachineId", status.AwsLambas_Details.GetMachineId)
@@ -162,17 +174,6 @@ func PrintStatus(status ServiceStatus) {
 	printAwsLambdaResult("RenewMachineId", status.AwsLambas_Details.RenewMachineId)
 	printAwsLambdaResult("RevokeMachineId", status.AwsLambas_Details.RevokeMachineId)
 	printAwsLambdaResult("GetMachineIdStatus", status.AwsLambas_Details.GetMachineIdStatus)
-
-	printStatusResult("Snowflake connection", status.SnowflakeConnection, "Success", "Error", "")
-
-	printStatusResult("Snowflake functions", status.SnowflakeFunctions, "All Snowflake External Functions are online", "One or more Snowflake functions in error state", "One or more Snowflake functions are missing")
-	printAwsLambdaResult("GetMachineId", status.SnowflakeFunctions_Details.GetMachineId)
-	printAwsLambdaResult("RequestMachineId", status.SnowflakeFunctions_Details.RequestMachineId)
-	printAwsLambdaResult("ListMachineIds", status.SnowflakeFunctions_Details.ListMachineIds)
-	printAwsLambdaResult("RenewMachineId", status.SnowflakeFunctions_Details.RenewMachineId)
-	printAwsLambdaResult("RevokeMachineId", status.SnowflakeFunctions_Details.RevokeMachineId)
-	printAwsLambdaResult("GetMachineIdStatus", status.SnowflakeFunctions_Details.GetMachineIdStatus)
-
 }
 func printStatusResult(name string, status StatusResult, valueSuccess string, valueError string, valuePartialError string) {
 	s := ""
@@ -191,6 +192,9 @@ func printStatusResult(name string, status StatusResult, valueSuccess string, va
 		break
 	}
 	fmt.Printf("%v: %v\n", name, s)
+	if status.Name != "" {
+		fmt.Printf("Environment:\n\t%v\n", status.Name)
+	}
 	if status.Error != nil {
 		fmt.Printf("\n\tError:\n\t%v\n", status.Error.Error())
 	}

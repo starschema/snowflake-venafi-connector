@@ -66,15 +66,15 @@ func GetAccessToken(tpp_url string) (string, error) {
 	var found_token bool
 	for _, x := range credentialArray {
 		if x["url"] == tpp_url {
-			expiritation_time, found_exp := x["access_token_expires"]
-			access_token, found_token = x["access_token"]
+			expiritation_time, found_exp := x["AccessTokenExpires"]
+			access_token, found_token = x["AccessToken"]
 			layout := "2006-01-02T15:04:05.000Z"
 			t, _ := time.Parse(layout, expiritation_time)
 
 			if (!found_exp || !found_token) || !CheckIfAccessTokenIsValid(t) {
 				new_credentials := GetNewAccessToken(x)
 				if new_credentials != nil {
-					access_token = (*new_credentials)["access_token"]
+					access_token = (*new_credentials)["AccessToken"]
 					x = *new_credentials
 					uploadRefreshedTokenToS3(credentialArray, CREDENTIAL_FILE_NAME, S3_BUCKET, ZONE)
 					break
@@ -92,8 +92,8 @@ func GetAccessToken(tpp_url string) (string, error) {
 	return access_token, nil
 }
 
-func CheckIfAccessTokenIsValid(acces_token_expiration time.Time) bool {
-	return time.Now().Before(acces_token_expiration)
+func CheckIfAccessTokenIsValid(access_token_expiration time.Time) bool {
+	return time.Now().Before(access_token_expiration)
 }
 
 func GetNewAccessToken(single_credential_for_tpp map[string]string) *map[string]string {
@@ -104,16 +104,16 @@ func GetNewAccessToken(single_credential_for_tpp map[string]string) *map[string]
 		return nil
 	}
 
-	auth := endpoint.Authentication{RefreshToken: single_credential_for_tpp["refresh_token"]}
+	auth := endpoint.Authentication{RefreshToken: single_credential_for_tpp["RefreshToken"]}
 
 	new_creds, err := c.RefreshAccessToken(&auth)
 	if err != nil {
 		log.Errorf("err: %v", err.Error())
 		return nil
 	}
-	single_credential_for_tpp["access_token"] = new_creds.Access_token
-	single_credential_for_tpp["refresh_token"] = new_creds.Refresh_token
-	single_credential_for_tpp["access_token_expires"] = fmt.Sprintf("%d", new_creds.Expires)
+	single_credential_for_tpp["AccessToken"] = new_creds.Access_token
+	single_credential_for_tpp["RefreshToken"] = new_creds.Refresh_token
+	single_credential_for_tpp["AccessTokenExpires"] = fmt.Sprintf("%d", new_creds.Expires)
 	return &single_credential_for_tpp
 }
 

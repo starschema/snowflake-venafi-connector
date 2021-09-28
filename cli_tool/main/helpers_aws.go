@@ -20,6 +20,7 @@ import (
 	lambdaTypes "github.com/aws/aws-sdk-go-v2/service/lambda/types"
 	"github.com/aws/aws-sdk-go-v2/service/s3"
 	"github.com/aws/aws-sdk-go-v2/service/s3/types"
+
 	"github.com/aws/aws-sdk-go-v2/service/sts"
 )
 
@@ -69,6 +70,7 @@ func GetBucket(svc *s3.Client, bucketName string) (bucket []types.Object, credsI
 		}
 		return []types.Object{}, false, false, err
 	}
+
 	return result.Contents, false, false, nil
 }
 
@@ -145,7 +147,7 @@ func CreateLambdaFunction(svc *lambda.Client, functionName string, binaryName st
 	envVariables["S3_BUCKET"] = "venafi-credentials"
 	_, err := svc.CreateFunction(context.TODO(), &lambda.CreateFunctionInput{
 		FunctionName: aws.String(functionName),
-		Role:         aws.String(fmt.Sprintf("arn:aws:iam::%s:role/venafi-test-access", accountID)), //TODO
+		Role:         aws.String(fmt.Sprintf("arn:aws:iam::%s:role/Venafi-full-access-to-s3-and-lambda", accountID)), //TODO
 		Code: &lambdaTypes.FunctionCode{
 			ZipFile: zipContent,
 		},
@@ -192,23 +194,6 @@ func CreateLambdaS3Role(svc *iam.Client, roleName string) error {
 		AssumeRolePolicyDocument: aws.String(`{
 			"Version": "2012-10-17",
 			"Statement": [{
-				"Sid": "AmazonS3FullAccess",
-				"Effect": "Allow",
-				"Principal": {
-					"Service": "s3.amazonaws.com"
-				},
-				"Action": "sts:AssumeRole"
-			},
-			{
-				"Sid": "CloudWatchLogsFullAccess",
-				"Effect": "Allow",
-				"Principal": {
-					"Service": "cloudwatch.amazonaws.com"
-				},
-				"Action": "sts:AssumeRole"
-			},
-			{
-				"Sid": "AWSLambdaFullAccess",
 				"Effect": "Allow",
 				"Principal": {
 					"Service": "lambda.amazonaws.com"
@@ -238,6 +223,14 @@ func CreateLambdaS3Role(svc *iam.Client, roleName string) error {
 	_, err = svc.AttachRolePolicy(context.TODO(), &iam.AttachRolePolicyInput{
 		RoleName:  aws.String(roleName),
 		PolicyArn: aws.String("arn:aws:iam::aws:policy/CloudWatchLogsFullAccess"), // access to cloudwatch logs
+	})
+	if err != nil {
+		return err
+	}
+
+	_, err = svc.AttachRolePolicy(context.TODO(), &iam.AttachRolePolicyInput{
+		RoleName:  aws.String(roleName),
+		PolicyArn: aws.String("arn:aws:iam::aws:policy/CloudWatchLogsReadOnlyAccess"), // access to cloudwatch logs
 	})
 	if err != nil {
 		return err
@@ -283,6 +276,13 @@ func AttachSnowflakePropertiesToPolicy(svc *iam.Client, roleName string, externa
 						"sts:ExternalId": "%s"
 					}
 				}
+			},
+			{
+				"Effect": "Allow",
+				"Principal": {
+					"Service": "lambda.amazonaws.com"
+				},
+				"Action": "sts:AssumeRole"
 			}
 		]
 	}`, awsUserARN, externalID)

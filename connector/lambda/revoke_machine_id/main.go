@@ -13,8 +13,6 @@ import (
 func RevokeMachineID(ctx context.Context, request events.APIGatewayProxyRequest) (events.APIGatewayProxyResponse, error) {
 
 	log.AddTarget(os.Stdout, log.LevelDebug)
-	log.Infof("!!!!REQUEST: %v", request)
-
 	configParams, requestParams := utils.ParseSnowflakeParameters(request, utils.REVOKE_MID_TYPE)
 
 	client, err := utils.NewVenafiConnector(configParams)
