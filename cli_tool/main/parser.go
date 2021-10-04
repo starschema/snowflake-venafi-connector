@@ -52,11 +52,13 @@ func NewStatusCommand() *StatusCommand {
 	cc := &StatusCommand{
 		fs: flag.NewFlagSet("status", flag.ContinueOnError),
 	}
+	cc.fs.StringVar(&cc.file, "file", "", "Configuration yaml file for status")
 	return cc
 }
 
 type StatusCommand struct {
-	fs *flag.FlagSet
+	fs   *flag.FlagSet
+	file string
 }
 
 func (c *StatusCommand) Name() string {
@@ -68,7 +70,10 @@ func (c *StatusCommand) Init(args []string) error {
 }
 
 func (c *StatusCommand) Run() error {
-	config, _, s3Client, lambdaClient, iamClient, gatewayClient, stsClient := bootstrapOperation(0)
+	if c.file == "" {
+		log.Fatal("Please provide a full path for your config file with --file flag")
+	}
+	config, _, s3Client, lambdaClient, iamClient, gatewayClient, stsClient := bootstrapOperation(0, c.file)
 	accountID, err := GetCallerIdentity(stsClient)
 	if err != nil {
 		log.Fatal("Failed to get account id")
@@ -81,11 +86,14 @@ func NewInstallCommand() *InstallCommand {
 	cc := &InstallCommand{
 		fs: flag.NewFlagSet("install", flag.ContinueOnError),
 	}
+	cc.fs.StringVar(&cc.file, "file", "", "Configuration yaml file for install")
+
 	return cc
 }
 
 type InstallCommand struct {
-	fs *flag.FlagSet
+	fs   *flag.FlagSet
+	file string
 }
 
 func (c *InstallCommand) Name() string {
@@ -97,7 +105,10 @@ func (c *InstallCommand) Init(args []string) error {
 }
 
 func (c *InstallCommand) Run() error {
-	config, _, s3Client, lambdaClient, iamClient, gatewayClient, stsClient := bootstrapOperation(0)
+	if c.file == "" {
+		log.Fatal("Please provide a full path for your config file with --file flag")
+	}
+	config, _, s3Client, lambdaClient, iamClient, gatewayClient, stsClient := bootstrapOperation(0, c.file)
 	accountID, err := GetCallerIdentity(stsClient)
 	if err != nil {
 		log.Fatal("Failed to get account id")
@@ -131,12 +142,12 @@ func root(args []string) error {
 			cmd.Run()
 			if subcommand == "install" {
 				Log(true, `Venafi Snowflake Integration is succesfully installed. You can call the following functions from Snowflake:
-			GETMACHINEID(<type:string>, <ttp_url:string>, <request_id_of_machine_identity:string>)
-			RENEWMACHINEID(<type:string>, <ttp_url:string>, <request_id_of_machine_identity:string>)
-			REVOKEMACHINEID(<type:string>, <ttp_url:string>, <request_id_of_machine_identity:string, <should_disable:bool>)
-			LISTMACHINEIDS(<type:string>, <ttp_url:string>, <zone:string>)
-			GETMACHINEIDSTATUS(<type:string>, <ttp_url:string>, <zone:string>, <name_of_machine_identity:string>)
-			REQUESTMACHINEID(<type:string>, <ttp_url:string>, <zone:string>, <common_name:string>)
+			GET_MACHINE_ID(<type:string>, <ttp_url:string>, <request_id_of_machine_identity:string>)
+			RENEW_MACHINE_ID(<type:string>, <ttp_url:string>, <request_id_of_machine_identity:string>)
+			REVOKE_MACHINE_ID(<type:string>, <ttp_url:string>, <request_id_of_machine_identity:string, <should_disable:bool>)
+			LIST_MACHINE_IDS(<type:string>, <ttp_url:string>, <zone:string>)
+			GET_MACHINE_ID_STATUS(<type:string>, <ttp_url:string>, <zone:string>, <name_of_machine_identity:string>)
+			REQUES_TMACHINE_ID(<type:string>, <ttp_url:string>, <zone:string>, <common_name:string>)
 					`, 0)
 				return nil
 			} else {

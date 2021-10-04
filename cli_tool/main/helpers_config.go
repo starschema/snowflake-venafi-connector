@@ -35,8 +35,8 @@ type VenafiOptions struct {
 	Url                string
 }
 
-func GetConfig() ConfigOptions {
-	filepath := "./config.yml"
+func GetConfig(configFilePath string) ConfigOptions {
+	filepath := configFilePath
 	if !verifyPathExist(filepath) {
 		log.Fatal("Configuration file is missing. Please use an existing file for the -file flag")
 	}

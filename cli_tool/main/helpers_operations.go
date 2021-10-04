@@ -9,9 +9,9 @@ import (
 	"github.com/aws/aws-sdk-go-v2/service/sts"
 )
 
-func bootstrapOperation(tabIndex int) (ConfigOptions, aws.Config, *s3.Client, *lambda.Client, *iam.Client, *apigateway.Client, *sts.Client) {
+func bootstrapOperation(tabIndex int, configFilePath string) (ConfigOptions, aws.Config, *s3.Client, *lambda.Client, *iam.Client, *apigateway.Client, *sts.Client) {
 	Log(true, "Getting app config", tabIndex)
-	c := GetConfig()
+	c := GetConfig(configFilePath)
 	Log(true, "Getting AWS config", tabIndex)
 	awsConfig := GetAwsConfig(c.Aws)
 	Log(true, "Create S3 client", tabIndex)

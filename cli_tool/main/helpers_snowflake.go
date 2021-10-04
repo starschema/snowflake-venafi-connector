@@ -9,12 +9,18 @@ import (
 	_ "github.com/snowflakedb/gosnowflake"
 )
 
-const SNOWFLAKE_FUNCTION_NAME_GETMACHINEID = "getmachineid"
-const SNOWFLAKE_FUNCTION_NAME_REQUESTMACHINEID = "requestmachineid"
-const SNOWFLAKE_FUNCTION_NAME_LISTMACHINEIDS = "listmachineids"
-const SNOWFLAKE_FUNCTION_NAME_RENEWMACHINEID = "renewmachineid"
-const SNOWFLAKE_FUNCTION_NAME_REVOKEMACHINEID = "revokemachineid"
-const SNOWFLAKE_FUNCTION_NAME_GETMACHINEIDSTATUS = "getmachineidstatus"
+const SNOWFLAKE_FUNCTION_NAME_GETMACHINEID = "GET_MACHINE_ID"
+const SNOWFLAKE_FUNCTION_NAME_REQUESTMACHINEID = "REQUEST_MACHINE_ID"
+const SNOWFLAKE_FUNCTION_NAME_LISTMACHINEIDS = "LIST_MACHINE_IDS"
+const SNOWFLAKE_FUNCTION_NAME_RENEWMACHINEID = "RENEW_MACHINE_ID"
+const SNOWFLAKE_FUNCTION_NAME_REVOKEMACHINEID = "REVOKE_MACHINE_ID"
+const SNOWFLAKE_FUNCTION_NAME_GETMACHINEIDSTATUS = "GET_MACHINE_ID_STATUS"
+const SNOWFLAKE_FUNCTION_ALIAS_GETMACHINEID = "GET_MID"
+const SNOWFLAKE_FUNCTION_ALIAS_REQUESTMACHINEID = "REQUEST_MID"
+const SNOWFLAKE_FUNCTION_ALIAS_LISTMACHINEIDS = "LIST_MIDS"
+const SNOWFLAKE_FUNCTION_ALIAS_RENEWMACHINEID = "RENEW_MID"
+const SNOWFLAKE_FUNCTION_ALIAS_REVOKEMACHINEID = "REVOKE_MID"
+const SNOWFLAKE_FUNCTION_ALIAS_GETMACHINEIDSTATUS = "GET_MID_STATUS"
 
 func getConnectionStringFromParams(username, password, account, warehouse, database, schema, role string) string {
 	return fmt.Sprintf("%s:%s@%s-%s/%s/%s?my_warehouse=%s&role=%s", username, "7^kJuS!$QLVzPy~_", account, account, database, schema, warehouse, role)
@@ -38,7 +44,7 @@ func CreateSnowflakeApiIntegration(integrationName string, awsRoleARN string, en
 		return "", "", err
 	}
 	defer db.Close()
-	sql := fmt.Sprintf(`create or replace api integration venafi_integration api_provider = aws_api_gateway api_aws_role_arn = '%s' enabled = true api_allowed_prefixes = ('%s')`, awsRoleARN, endpointUrl)
+	sql := fmt.Sprintf(`create or replace api integration %s api_provider = aws_api_gateway api_aws_role_arn = '%s' enabled = true api_allowed_prefixes = ('%s')`, integrationName, awsRoleARN, endpointUrl)
 	_, err = db.Exec(sql)
 	if err != nil {
 		return "", "", err
@@ -68,8 +74,9 @@ func CreateSnowflakeApiIntegration(integrationName string, awsRoleARN string, en
 	return final["API_AWS_EXTERNAL_ID"], final["API_AWS_IAM_USER_ARN"], nil //TODO qUERY return values
 }
 
-func CreateSnowflakeFunction(functionName string, endpoint string, conf SnowflakeOptions) {
-	path := endpoint + functionName
+func CreateSnowflakeFunction(functionName string, alias string, endpoint string, conf SnowflakeOptions, integrationName string) {
+	serializedFuncName := strings.ToLower(strings.ReplaceAll(functionName, "_", ""))
+	path := endpoint + serializedFuncName
 	connStr := getConnectionStringFromParams(conf.Username, conf.Password, conf.Account, conf.Warehouse, conf.Database, conf.Schema, conf.Role)
 	var paramStr string
 	switch functionName {
@@ -78,7 +85,7 @@ func CreateSnowflakeFunction(functionName string, endpoint string, conf Snowflak
 	case SNOWFLAKE_FUNCTION_NAME_RENEWMACHINEID:
 		paramStr = "(type varchar, tpp_url varchar, request_id varchar)"
 	case SNOWFLAKE_FUNCTION_NAME_REVOKEMACHINEID:
-		paramStr = "(type varchar, tpp_url varchar, request_id varchar)"
+		paramStr = "(type varchar, tpp_url varchar, request_id varchar, should_disable boolean)"
 	case SNOWFLAKE_FUNCTION_NAME_REQUESTMACHINEID:
 		paramStr = "(type varchar, tpp_url varchar, dns varchar, zone varchar, upn varchar, common_name varchar)"
 	case SNOWFLAKE_FUNCTION_NAME_LISTMACHINEIDS:
@@ -86,7 +93,7 @@ func CreateSnowflakeFunction(functionName string, endpoint string, conf Snowflak
 	case SNOWFLAKE_FUNCTION_NAME_GETMACHINEIDSTATUS:
 		paramStr = "(type varchar, tpp_url varchar, zone varchar, common_name varchar)"
 	default:
-		fmt.Printf("############## invalid function name: %v", functionName)
+		fmt.Printf("invalid function name: %v", functionName)
 	}
 
 	db, err := sql.Open("snowflake", connStr)
@@ -98,10 +105,20 @@ func CreateSnowflakeFunction(functionName string, endpoint string, conf Snowflak
 	sql := fmt.Sprintf(`
 			create or replace external function %s %s
 			returns variant
-			api_integration = venafi_integration
+			api_integration = %s
 			COMPRESSION = none
-			as '%s'`, functionName, paramStr, path)
+			as '%s'`, functionName, paramStr, integrationName, path)
 	_, err = db.Exec(sql)
+	if err != nil {
+		log.Fatal("Failed to create function: " + err.Error())
+	}
+	sqlForAlias := fmt.Sprintf(`
+	create or replace external function %s %s
+	returns variant
+	api_integration = %s
+	COMPRESSION = none
+	as '%s'`, alias, paramStr, integrationName, path)
+	_, err = db.Exec(sqlForAlias) // create aliases
 	if err != nil {
 		log.Fatal("Failed to create function: " + err.Error())
 	}
