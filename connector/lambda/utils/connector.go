@@ -25,7 +25,6 @@ type RequestMachineIDResponse struct {
 	RequestID   string `json:"RequestID"`
 }
 
-
 type VenafiConnector interface {
 	RequestMachineID(ctx context.Context, commonName, upn, dns string) (string, error)
 	GetMachineID(ctx context.Context, requestID string) (string, error)
@@ -100,13 +99,13 @@ func (c *venafiConnector) RequestMachineID(ctx context.Context, cn string, upn [
 	}
 	err := c.client.GenerateRequest(nil, enrollReq)
 	if err != nil {
-		fmt.Printf("Failed to generate request: %v ", err)
+		log.Errorf("Failed to generate request: %v ", err)
 		return createSnowflakeResponse(err.Error()), nil // return nil here, because we would like to see the error in Snowflake
 	}
 
 	requestID, err := c.client.RequestCertificate(enrollReq)
 	if err != nil {
-		fmt.Printf("Failed to request certificate:: %v ", err)
+		log.Errorf("Failed to request certificate:: %v ", err)
 		return createSnowflakeResponse(err.Error()), nil // return nil here, because we would like to see the error in Snowflake
 	}
 
