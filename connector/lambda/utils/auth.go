@@ -54,7 +54,6 @@ func shouldRequestNewToken(credArr []credentialJSON, tppUrl string) (credentialJ
 	invalidTppUrlError := fmt.Errorf("None of the TPP urls matching for the requested TPP url: %v", tppUrl)
 	for _, singleTPPCred := range credArr {
 		if singleTPPCred["Url"] == tppUrl {
-			fmt.Printf("!!!!! single tpp: %v", singleTPPCred)
 			expirationTime, foundExp := singleTPPCred["AccessTokenExpires"]
 			if !foundExp {
 				log.Errorf("Failed to get token expiration time: %v", nil)
