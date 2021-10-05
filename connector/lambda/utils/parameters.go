@@ -17,11 +17,19 @@ type ConfigParameters struct {
 
 type RequestParameters struct {
 	RequestID     string
-	UPN           string
+	UPN           []string
 	Disable       bool
 	MachineIDType string
 	CommonName    string
-	DNSName       string
+	DNSName       []string
+}
+
+func snowflakeInterfaceToStrArray(snowflakeArr interface{}) []string {
+	intefaceStr := fmt.Sprintf("%v", snowflakeArr)
+	trimmed := strings.TrimPrefix(intefaceStr, "[")
+	trimmed = strings.TrimSuffix(trimmed, "]")
+	resultArr := strings.Split(trimmed, ",")
+	return resultArr
 }
 
 func ParseSnowflakeParameters(request events.APIGatewayProxyRequest, queryType string) (ConfigParameters, RequestParameters) {
@@ -49,9 +57,9 @@ func ParseSnowflakeParameters(request events.APIGatewayProxyRequest, queryType s
 		requestParameters.CommonName = fmt.Sprintf("%v", snowflakeParams[4])
 
 	case REQUEST_MID_TYPE:
-		requestParameters.DNSName = fmt.Sprintf("%v", snowflakeParams[3])
+		requestParameters.DNSName = snowflakeInterfaceToStrArray(snowflakeParams[3])
 		configParameters.Zone = fmt.Sprintf("%v", snowflakeParams[4])
-		requestParameters.UPN = fmt.Sprintf("%v", snowflakeParams[5])
+		requestParameters.UPN = snowflakeInterfaceToStrArray(snowflakeParams[5])
 		requestParameters.CommonName = fmt.Sprintf("%v", snowflakeParams[6])
 	case RENEW_MID_TYPE:
 		requestParameters.RequestID = strings.Replace(fmt.Sprintf("%v", snowflakeParams[3]), "\\", "\\\\", -1)
