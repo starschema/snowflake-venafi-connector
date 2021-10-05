@@ -5,6 +5,7 @@ import (
 	"encoding/json"
 	"fmt"
 	"os"
+	"strings"
 	"time"
 
 	"github.com/aws/aws-sdk-go/aws"
@@ -17,14 +18,14 @@ import (
 	log "github.com/palette-software/go-log-targets"
 )
 
-type credentialJSON []map[string]string
+type credentialJSON map[string]string
 
-func uploadRefreshedTokenToS3(credentials credentialJSON, filename, bucket, zone string) {
+func uploadRefreshedTokenToS3(credentials []credentialJSON, filename, bucket, zone string) error {
 
 	data, err := json.MarshalIndent(credentials, "", " ")
 	if err != nil {
 		log.Errorf("failed to marshal file %v", err)
-		return
+		return err
 	}
 	// The session the S3 Uploader will use
 	sess := session.Must(session.NewSession(&aws.Config{
@@ -43,12 +44,42 @@ func uploadRefreshedTokenToS3(credentials credentialJSON, filename, bucket, zone
 	})
 	if err != nil {
 		log.Errorf("Failed to upload file, %v", err)
-		return
+		return err
 	}
 	log.Info("New Credential File is uploaded")
+	return nil
 }
 
-func GetAccessToken(tpp_url string) (string, error) {
+func shouldRequestNewToken(credArr []credentialJSON, tppUrl string) (credentialJSON, bool, error) {
+	invalidTppUrlError := fmt.Errorf("None of the TPP urls matching for the requested TPP url: %v", tppUrl)
+	for _, singleTPPCred := range credArr {
+		if singleTPPCred["Url"] == tppUrl {
+			fmt.Printf("!!!!! single tpp: %v", singleTPPCred)
+			expirationTime, foundExp := singleTPPCred["AccessTokenExpires"]
+			if !foundExp {
+				log.Errorf("Failed to get token expiration time: %v", nil)
+				return singleTPPCred, true, fmt.Errorf("No expiration time")
+			}
+			_, foundToken := singleTPPCred["AccessToken"]
+			// layout := "2006-01-02T15:04:05.000Z"
+			t, err := time.Parse("2006-01-02T15:04:05Z07:00", expirationTime)
+			if err != nil {
+				log.Errorf("Failed to parse token expiration time: %v", err)
+				return singleTPPCred, true, err
+			}
+			if !foundExp || !foundToken || !CheckIfAccessTokenIsValid(t) {
+				return singleTPPCred, true, nil
+			} else {
+				return singleTPPCred, false, nil
+
+			}
+		}
+	}
+	log.Errorf("No matching TPP url when check token")
+	return credentialJSON{}, false, invalidTppUrlError
+}
+
+func GetAccessToken(tppUrl string) (string, error) {
 	CREDENTIAL_FILE_NAME := os.Getenv("CREDENTIAL_FILE_NAME")
 	S3_BUCKET := os.Getenv("S3_BUCKET")
 	ZONE := os.Getenv("ZONE")
@@ -62,34 +93,37 @@ func GetAccessToken(tpp_url string) (string, error) {
 	if err != nil {
 		return "", fmt.Errorf("Failed to parse token %v", err.Error())
 	}
-	var access_token string
-	var found_token bool
-	for _, x := range credentialArray {
-		if x["url"] == tpp_url {
-			expiritation_time, found_exp := x["access_token_expires"]
-			access_token, found_token = x["access_token"]
-			layout := "2006-01-02T15:04:05.000Z"
-			t, _ := time.Parse(layout, expiritation_time)
-
-			if !found_exp || !found_token || CheckIfAccessTokenIsValid(t) {
-				new_credentials := GetNewAccessToken(x)
-				if new_credentials != nil {
-					access_token = (*new_credentials)["access_token"]
-					x = *new_credentials
-					uploadRefreshedTokenToS3(credentialArray, CREDENTIAL_FILE_NAME, S3_BUCKET, ZONE)
-					break
-				} else {
-					log.Errorf("Failed to get new credentials")
-					return "", fmt.Errorf("Failed to refresh and get new credentials from S3")
-				}
-			} else {
-				log.Infof("Found token is valid, no need to return new token.")
-				break
-			}
-			break
-		}
+	var accessToken string
+	credsForSingleTpp, shouldRequest, err := shouldRequestNewToken(credentialArray, tppUrl)
+	if err != nil && strings.Contains(err.Error(), "TPP") {
+		log.Errorf("Could not find valid tpp url in credential file.")
+		return "", err
 	}
-	return access_token, nil
+	if err != nil {
+		log.Errorf("Failed to check token validation")
+		return "", err
+	}
+	if shouldRequest {
+		newCredentials := GetNewAccessToken(credsForSingleTpp)
+		if newCredentials != nil {
+			accessToken = (*newCredentials)["AccessToken"]
+			credsForSingleTpp = *newCredentials
+			err := uploadRefreshedTokenToS3(credentialArray, CREDENTIAL_FILE_NAME, S3_BUCKET, ZONE)
+			if err != nil {
+				log.Errorf("Failed to upload new creds to AWS. Next run will generate a new token.")
+				return accessToken, err
+			}
+			return accessToken, nil
+		} else {
+			log.Errorf("Failed to get new credentials")
+			return "", fmt.Errorf("Failed to refresh and get new credentials from S3")
+
+		}
+	} else {
+		accessToken, _ = credsForSingleTpp["AccessToken"]
+		log.Infof("Found token is valid, no need to return new token.")
+		return accessToken, nil
+	}
 }
 
 func CheckIfAccessTokenIsValid(acces_token_expiration time.Time) bool {
@@ -111,14 +145,14 @@ func GetNewAccessToken(single_credential_for_tpp map[string]string) *map[string]
 		log.Errorf("err: %v", err.Error())
 		return nil
 	}
-	single_credential_for_tpp["access_token"] = new_creds.Access_token
-	single_credential_for_tpp["refresh_token"] = new_creds.Refresh_token
-	single_credential_for_tpp["access_token_expires"] = fmt.Sprintf("%d", new_creds.Expires)
+	single_credential_for_tpp["accessToken"] = new_creds.Access_token
+	single_credential_for_tpp["refreshToken"] = new_creds.Refresh_token
+	single_credential_for_tpp["accessTokenExpires"] = fmt.Sprintf("%d", new_creds.Expires)
 	return &single_credential_for_tpp
 }
 
-func parseCredentialData(credentialsData []byte) (credentialJSON, error) {
-	var data credentialJSON
+func parseCredentialData(credentialsData []byte) ([]credentialJSON, error) {
+	var data []credentialJSON
 	err := json.Unmarshal(credentialsData, &data)
 	if err != nil {
 		log.Errorf("Failed to unmarshal credentials: %v", err.Error())
