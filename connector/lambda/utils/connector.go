@@ -161,7 +161,7 @@ func (c *venafiConnector) ListMachineIDs(ctx context.Context) (string, error) {
 	}
 	log.Info("Sucessfully called List Certificates")
 	// Transform data to a form which is readable by Snowflake
-	return createSnowflakeResponse(string(bytes)), nil
+	return createSnowflakeResponseWithEscape(bytes), nil
 }
 
 func (c *venafiConnector) RevokeMachineID(ctx context.Context, requestID string, disable bool) (string, error) {
