@@ -87,7 +87,7 @@ func CreateSnowflakeFunction(functionName string, alias string, endpoint string,
 	case SNOWFLAKE_FUNCTION_NAME_REVOKEMACHINEID:
 		paramStr = "(type varchar, tpp_url varchar, request_id varchar, should_disable boolean)"
 	case SNOWFLAKE_FUNCTION_NAME_REQUESTMACHINEID:
-		paramStr = "(type varchar, tpp_url varchar, dns varchar, zone varchar, upn varchar, common_name varchar)"
+		paramStr = "(type varchar, tpp_url varchar, dns array, zone varchar, upn array, common_name varchar)"
 	case SNOWFLAKE_FUNCTION_NAME_LISTMACHINEIDS:
 		paramStr = "(type varchar, tpp_url varchar, zone varchar)"
 	case SNOWFLAKE_FUNCTION_NAME_GETMACHINEIDSTATUS:
@@ -132,7 +132,7 @@ func GetSnowflakeFunction(functionName string, conf SnowflakeOptions) (notFoundE
 		return nil, err
 	}
 	defer db.Close()
-	sqlStatement := fmt.Sprintf(`select function_name from information_schema.functions where function_name like '%s'`, functionName)
+	sqlStatement := fmt.Sprintf(`select function_name from information_schema.functions where function_name = '%s'`, functionName)
 	var resultInterface interface{}
 	err = db.QueryRow(sqlStatement).Scan(&resultInterface)
 	if err == sql.ErrNoRows || resultInterface == nil {

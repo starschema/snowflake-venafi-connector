@@ -20,7 +20,8 @@ type ServiceStatus struct {
 	AwsLambdas                 StatusResult
 	AwsLambas_Details          AwsLambdaStatuses
 	AwsLambdaS3Role            StatusResult
-	AwsLambdaSnowflakeRole     StatusResult
+	AwsSnowflakeRole           StatusResult
+	AwsPolicyToS3              StatusResult
 	SnowflakeHealth            StatusResult
 	SnowflakeFunctions_Details []SnowflakeFunctionStatuses
 	AwsToVenafiConnectivity    StatusResult
@@ -125,12 +126,26 @@ func GetStatus(tabIndex int, c ConfigOptions, s3Client *s3.Client, lambdaClient 
 	}
 
 	// Check Roles
-	roleName := deploymentInfo.Aws_role_name
+	roleName := deploymentInfo.Aws_lambda_role_name
 	if roleName == "" {
-		roleName = AWS_ROLE_NAME
+		roleName = AWS_LAMBDA_ROLE_NAME
 	}
 
-	ret.AwsLambdaS3Role = GetLambdaRole(iamClient, roleName)
+	ret.AwsLambdaS3Role = GetAwsRole(iamClient, roleName)
+
+	snowflakeRole := deploymentInfo.Aws_snowflake_role_name
+	if snowflakeRole == "" {
+		snowflakeRole = AWS_SNOWFLAKE_ROLE_NAME
+	}
+
+	ret.AwsSnowflakeRole = GetAwsRole(iamClient, snowflakeRole)
+
+	policyArn := deploymentInfo.Aws_policy_arn
+	if policyArn == "" {
+		ret.AwsPolicyToS3 = StatusResult{State: 2}
+	} else {
+		ret.AwsPolicyToS3 = GetAwsPolicy(iamClient, snowflakeRole)
+	}
 
 	// Check AWS lambas
 	lambda_state := FunctionCheckState{}
@@ -211,7 +226,9 @@ func PrintStatus(status ServiceStatus) {
 	printStatusResult("AWS Credentials", status.AwsCredentials, "Valid", "Invalid", "")
 	printStatusResult("AWS Bucket", status.AwsBucketFound, "Exists", "Missing", "Exists, credential file not found")
 	fmt.Printf("")
-	printStatusResult("Snowflake <-> AWS Lambda <-> S3 role", status.AwsLambdaS3Role, "Exists", "Failed to check", "Missing")
+	printStatusResult("AWS Lambda <-> S3 role", status.AwsLambdaS3Role, "Exists", "Failed to check", "Missing")
+	printStatusResult("Snowflake <-> Lambda", status.AwsSnowflakeRole, "Exists", "Failed to check", "Missing")
+
 	// printStatusResult("AWS Lambda <-> SF role", status.AwsLambdaSnowflakeRole, "Exists", "Failed to check", "Missing")
 	fmt.Printf("")
 	printStatusResult("AWS API Gateway", status.AwsGateway, "Aws API Gateway exists", "AWS API Gateway not found", "AWS APi Gateway not found")

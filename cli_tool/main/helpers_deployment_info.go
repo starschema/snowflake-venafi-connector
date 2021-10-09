@@ -17,7 +17,9 @@ const DEPLOYMENTINFO_FILE_NAME = "deploymentinfo.json"
 
 type DeploymentInfo struct {
 	Aws_function_arns              []string
-	Aws_role_name                  string
+	Aws_lambda_role_name           string
+	Aws_snowflake_role_name        string
+	Aws_policy_arn                 string
 	Aws_gateway_id                 string
 	Aws_gateway_parent_resource_id string
 	Aws_gateway_endpoint_url       string

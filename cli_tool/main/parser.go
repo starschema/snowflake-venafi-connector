@@ -108,12 +108,12 @@ func (c *InstallCommand) Run() error {
 	if c.file == "" {
 		log.Fatal("Please provide a full path for your config file with --file flag")
 	}
-	config, _, s3Client, lambdaClient, iamClient, gatewayClient, stsClient := bootstrapOperation(0, c.file)
+	config, awsConfig, s3Client, lambdaClient, iamClient, gatewayClient, stsClient := bootstrapOperation(0, c.file)
 	accountID, err := GetCallerIdentity(stsClient)
 	if err != nil {
 		log.Fatal("Failed to get account id")
 	}
-	Install(config, s3Client, lambdaClient, iamClient, gatewayClient, accountID)
+	Install(config, awsConfig, s3Client, lambdaClient, iamClient, gatewayClient, accountID)
 	return nil
 }
 

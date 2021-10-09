@@ -156,9 +156,7 @@ With this function you can revoke a machine identity. With a boolean as a last p
 SELECT REVOKE_MACHINE_ID('TLS', '<tpp_url>', '<request_id>', <should-disable>);
 ```
 
-## Security
-
-## Install Manually
+## Install Manually Using the AWS Console
 
 You can create the components of the integration manually from AWS Console and directly from Snowflake. In this way you are able to recieve a more customied solution.
 
@@ -336,16 +334,81 @@ Useful resources about AWS Lambda and Snowflake integration:
 https://docs.snowflake.com/en/sql-reference/external-functions-creating-aws-ui.html
 
 ## Install with Command Line Tool
+
+The CLI tool provides an easy deploy for Venafi Snowflake Integration.
+Features:
+
+* Check the current status of your integration
+* Install AWS Lambdas and Snowflake External Functions to your environment
+* Get credentials for Venafi Rest API if needed
+
+### Commands
+
+- *getcreds* - Get access token from Venafi Rest API with vcert-sdk client id
+
+- *install* - Get the status of the integration components in your environment
+
+- *state* - Show the
+
+### Prerequsites
+
+Make sure you have a valid aws credential file in your ~/.aws folder. The credential file has to contain a region config. You should select a region where you would like to install your bucket and Lambdas.
+Example aws credential file:
+
+```
+[venafi-snowflake-connector]
+aws_access_key_id=DEMOKEYID
+aws_secret_access_key=DEMOKEY
+region=eu-west-1
+```
+
+### Usage
+
 1. Clone the repository with `git clone https://github.com/starschema/snowflake-venafi-connector`
 2. `cd connector/cli_tool/main`
-3. There is a config.yml file which needs to be filled with your credentials to AWS, Snowflake and Venafi TPP server. This config file will be used by the installer to create the components of the integration. See the comments in the file.
-4. Run `go run . status` to check the current status of your integration. This will give you a detailed description in which components are installed, and which not. Before the first install none of the components should be installed.
-5. Run `go run . install` This command will use AWS Go SDK to create a bucket and upload your Venafi credentials to it, it will create an execution role to your Lambda functions which will also allow to the lambdas to read the uploaded credential files from the bucket. After the role and the bucket are ready it will create the Lambda functions and an API Gateway for match the Lambdas with Snowflake. After this, it will create an api integration and external functions in Snowflake. The latest step is to add Snowflake's external ID to your execution role, which is needed to call Lambdas from Snowflake.
-6. Run `go run . status` once again to check if all the components are available.
+3. There is an example_config.yml file which needs to be filled with your AWS, Snowflake and Venafi TPP server. This config file will be used by the installer to create the components of the integration. See the comments in the file.
+4. Run `go run . status --file=<path-to-your-config>` to check the current status of your integration. This will give you a detailed description in which components are installed, and which not. Before the first install none of the components should be installed.
+5. Run `go run . install --file=<path-to-your-config>` Command to install the external functions to the configured Snowflake database and AWS Lambdas
+6. Run `go run . status --file=<path-to-your-config>` once again to check if all the components are available.
+
+### Install steps
+
+1. An AWS configuration will be created by using your Aws profile.
+
+2. If the bucket you provided not exists the installer will create an S3 bucket and upload a json file to it which will contain your refresh token, access token and date of the token expiration.
+
+3. The installer will create a Lambda execution role and give permission to it, to access the bucket, to write logs in Cloudwatch and to execute the function.
+
+4. The installer will create a role which later will be set to the Rest Api to allow to call the execute API from Snowflake
+
+5. The installer will create an AWS Rest Api and assign the created role to it.
+
+6. The installer will upload to executables from the repository and create a Lambda for each function. The Lambdas will be added under a POST method as resources to the Rest Api
+
+7. In Snowflake an api integration will be created.
+
+8. The External ID from Snowflake will be added to the Rest Api!s role. This will allow Snowflake to call the AWS Lambdas through the Rest Api.
+
+9. Snowflake functions will be created on the api integration.
+
+All set!
+
+## Security and important notes
+
+* **If you would not like to put your Venafi credentials into the config file, you can create a bucket and upload it manually with the AWS console. In this way the cli tool will skip the credential file creation step. You still need to provide the name of your uploaded file and a bucket name created by you. Please check the Install Manually section to see the steps for uploading credentials.**
+* **You can set up additional security to your bucket in the AWS Console. Useful link: https://docs.aws.amazon.com/AmazonS3/latest/userguide/UsingEncryption.html**
+* **The installer will create two roles in AWS. The first role will be the execute role for the AWS Lambdas. This role will contains permissions to invoke the function, to write CloudWatch logs, and to access the S3 bucket where Venafi credentials are stored.**
+* **All functions will use the same role**
+* **The second role will be used by the AWS Rest API and the Snowflake API integration and will give a permission to call the AWS execute api from Snowflake.**
+* **There might be cases when you would like to modify the permission configuration of the Lambdas or re-upload your credentials, etc. Every step from the automatic installation can be done manually from AWS Console and Snowflake.**
+
 ## Troubleshoot
 
+If the automatic installation fails at one point, run a status command to see which components are missing. You can create them manually by following the Manual Tutorial or you can try to re-run an install. In the bucket there will be a deployment info file, which will provide you information about your existing components. Make sure that you use the proper ID's during manual install.
 
+Make sure that your AWS user has permission to create bucket, list buckets, create lambdas, list lambdas.
 
+If the installation was successful but the Snowflake functions are still not working, check the logs of the function in the AWS Console Cloudwatch.
 
-
+Please reach out with any question you might have.
 

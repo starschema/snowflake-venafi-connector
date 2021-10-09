@@ -6,7 +6,6 @@ import (
 	"fmt"
 	"io"
 	"net/http"
-	"os"
 	"strings"
 
 	"github.com/aws/aws-sdk-go-v2/aws"
@@ -32,19 +31,23 @@ const LAMBDA_FUNCTION_NAME_LISTMACHINEIDS = "listmachineids"
 const LAMBDA_FUNCTION_NAME_RENEWMACHINEID = "renewmachineid"
 const LAMBDA_FUNCTION_NAME_REVOKEMACHINEID = "revokemachineid"
 const LAMBDA_FUNCTION_NAME_GETMACHINEIDSTATUS = "getmachineidstatus"
-const AWS_ROLE_NAME = "venafi-execute-role"
+const AWS_LAMBDA_ROLE_NAME = "lambda-execute-role"
+const AWS_SNOWFLAKE_ROLE_NAME = "snowflake-role"
+const AWS_POLICY_TO_ACCESS_BUCKET = "venafi-lambda-access-to-s3-bucket"
+
 const AWS_REST_API_NAME = "venafi-snowflake-rest-api"
 
 func GetAwsConfig(awsConfig AwsOptions) aws.Config {
-
-	os.Setenv("AWS_ACCESS_KEY_ID", awsConfig.AccessKeyID)
-	os.Setenv("AWS_SECRET_ACCESS_KEY", awsConfig.AccessKey)
-	os.Setenv("AWS_DEFAULT_REGION", awsConfig.Zone)
-	cfg, err := config.LoadDefaultConfig(context.TODO())
-	if err != nil {
-		LogFatal("%v", err)
+	if awsConfig.Profile != "" {
+		cfg, err := config.LoadDefaultConfig(context.TODO(), config.WithSharedConfigProfile(awsConfig.Profile))
+		if err != nil {
+			LogFatal("Please check if you has valid credential and config file in your .aws folder%v", err)
+		}
+		return cfg
+	} else {
+		LogFatal("PLease define your AWS profile in the config file ")
 	}
-	return cfg
+	return aws.Config{}
 }
 
 func GetCallerIdentity(svc *sts.Client) (string, error) {
@@ -141,7 +144,7 @@ func DeleteLambdaFunction(svc *lambda.Client, functionName string) error {
 	})
 	return err
 }
-func CreateLambdaFunction(svc *lambda.Client, functionName string, binaryName string, zipContent []byte, restAPIID string, zone string, accountID string, bucket string) error {
+func CreateLambdaFunction(svc *lambda.Client, functionName string, binaryName string, zipContent []byte, restAPIID, zone, accountID, bucket, lambdaRole string) error {
 	sourceARN := fmt.Sprintf("arn:aws:execute-api:%s:%s:%s/*/*", zone, accountID, restAPIID)
 	envVariables := make(map[string]string)
 	envVariables["ZONE"] = zone
@@ -151,7 +154,7 @@ func CreateLambdaFunction(svc *lambda.Client, functionName string, binaryName st
 	err := Retry(func() error {
 		_, er := svc.CreateFunction(context.TODO(), &lambda.CreateFunctionInput{
 			FunctionName: aws.String(functionName),
-			Role:         aws.String(fmt.Sprintf("arn:aws:iam::%s:role/%s", accountID, AWS_ROLE_NAME)), //TODO
+			Role:         aws.String(fmt.Sprintf("arn:aws:iam::%s:role/%s", accountID, lambdaRole)),
 			Code: &lambdaTypes.FunctionCode{
 				ZipFile: zipContent,
 			},
@@ -177,7 +180,7 @@ func CreateLambdaFunction(svc *lambda.Client, functionName string, binaryName st
 	return nil
 }
 
-func GetLambdaRole(svc *iam.Client, roleName string) StatusResult {
+func GetAwsRole(svc *iam.Client, roleName string) StatusResult {
 	_, err := svc.GetRole(context.TODO(), &iam.GetRoleInput{RoleName: aws.String(roleName)})
 	ret := StatusResult{}
 	if err != nil {
@@ -193,7 +196,23 @@ func GetLambdaRole(svc *iam.Client, roleName string) StatusResult {
 	return ret
 }
 
-func CreateLambdaS3Role(svc *iam.Client, roleName string) error {
+func GetAwsPolicy(svc *iam.Client, policyARN string) StatusResult {
+	_, err := svc.GetPolicy(context.TODO(), &iam.GetPolicyInput{PolicyArn: aws.String(policyARN)})
+	ret := StatusResult{}
+	if err != nil {
+		if strings.Contains(err.Error(), "NoSuchEntity") {
+			ret.State = 3
+		} else {
+			ret.State = 2
+			ret.Error = err
+		}
+	} else {
+		ret.State = 1
+	}
+	return ret
+}
+
+func CreateLambdaS3Role(svc *iam.Client, roleName string, bucket string) error {
 	_, err := svc.CreateRole(context.TODO(), &iam.CreateRoleInput{
 		RoleName:    aws.String(roleName),
 		Description: aws.String("Execution Role for AWS Lambdas to access S3"),
@@ -211,20 +230,6 @@ func CreateLambdaS3Role(svc *iam.Client, roleName string) error {
 	if err != nil {
 		return err
 	}
-	_, err = svc.AttachRolePolicy(context.TODO(), &iam.AttachRolePolicyInput{
-		RoleName:  aws.String(roleName),
-		PolicyArn: aws.String("arn:aws:iam::aws:policy/AmazonS3FullAccess"), // access to s3
-	})
-	if err != nil {
-		return err
-	}
-	_, err = svc.AttachRolePolicy(context.TODO(), &iam.AttachRolePolicyInput{
-		RoleName:  aws.String(roleName),
-		PolicyArn: aws.String("arn:aws:iam::aws:policy/AWSLambda_FullAccess"), // access to lambdas
-	})
-	if err != nil {
-		return err
-	}
 
 	_, err = svc.AttachRolePolicy(context.TODO(), &iam.AttachRolePolicyInput{
 		RoleName:  aws.String(roleName),
@@ -234,9 +239,57 @@ func CreateLambdaS3Role(svc *iam.Client, roleName string) error {
 		return err
 	}
 
+	policyResp, err := svc.CreatePolicy(context.TODO(), &iam.CreatePolicyInput{
+		PolicyName: aws.String(AWS_POLICY_TO_ACCESS_BUCKET),
+		PolicyDocument: aws.String(fmt.Sprintf(`{
+			"Version": "2012-10-17",
+			"Statement": [
+				{
+					"Effect": "Allow",
+					"Action": [
+						"s3:ListBucket"
+					],
+					"Resource": "arn:aws:s3:::%s"
+				},
+				{
+					"Effect": "Allow",
+					"Action": [
+						"s3:PutObject",
+						"s3:GetObject"
+					],
+					"Resource": "arn:aws:s3:::%s/*"
+				}
+			]
+		}`, bucket, bucket)),
+	})
+	if err != nil {
+		return err
+	}
 	_, err = svc.AttachRolePolicy(context.TODO(), &iam.AttachRolePolicyInput{
 		RoleName:  aws.String(roleName),
-		PolicyArn: aws.String("arn:aws:iam::aws:policy/CloudWatchLogsReadOnlyAccess"), // access to cloudwatch logs
+		PolicyArn: policyResp.Policy.Arn, // attach access to s3 bucket
+	})
+	if err != nil {
+		return err
+	}
+
+	return nil // TODO MORE MEANINGFUL ERRORS
+}
+
+func CreateSnowflakeRole(svc *iam.Client, roleName string) error {
+	_, err := svc.CreateRole(context.TODO(), &iam.CreateRoleInput{
+		RoleName:    aws.String(roleName),
+		Description: aws.String("Role for Rest Api to call from Snowflake"),
+		AssumeRolePolicyDocument: aws.String(`{
+			"Version": "2012-10-17",
+			"Statement": [{
+				"Effect": "Allow",
+				"Principal": {
+					"Service": "lambda.amazonaws.com"
+				},
+				"Action": "sts:AssumeRole"
+			}]
+		}`),
 	})
 	if err != nil {
 		return err
@@ -281,7 +334,7 @@ func AttachSnowflakePropertiesToPolicy(svc *iam.Client, roleName string, externa
 	return nil // TODO MORE MEANINGFUL ERRORS
 }
 
-func CreateRestAPI(svc *apigateway.Client, role, accountId string, config ConfigOptions) (string, string, string, error) {
+func CreateRestAPI(svc *apigateway.Client, role, accountId string, region string) (string, string, string, error) {
 	principalStr := fmt.Sprintf(`{
 		"Version": "2012-10-17",
 		"Statement": [
@@ -294,7 +347,7 @@ func CreateRestAPI(svc *apigateway.Client, role, accountId string, config Config
 				"Resource": "arn:aws:execute-api:%s:%s:*/dev/POST/*"
 			}
 		]
-	}`, accountId, role, config.Aws.Zone, accountId)
+	}`, accountId, role, region, accountId)
 	var values *apigateway.CreateRestApiOutput
 	var restApiError error
 	err := Retry(func() error {
@@ -316,7 +369,7 @@ func CreateRestAPI(svc *apigateway.Client, role, accountId string, config Config
 	if err != nil {
 		return "", "", "", err
 	}
-	endpointUrl := fmt.Sprintf("https://%s.execute-api.%s.amazonaws.com/dev/", *values.Id, config.Aws.Zone)
+	endpointUrl := fmt.Sprintf("https://%s.execute-api.%s.amazonaws.com/dev/", *values.Id, region)
 	return *parentResource.Items[0].Id, *values.Id, endpointUrl, nil
 }
 

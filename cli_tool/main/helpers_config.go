@@ -14,10 +14,8 @@ type ConfigOptions struct {
 	Venafi    []VenafiOptions    `yaml:"venafi"`
 }
 type AwsOptions struct {
-	AccessKeyID string
-	AccessKey   string
-	Zone        string
-	Bucket      string
+	Profile string
+	Bucket  string
 }
 type SnowflakeOptions struct {
 	Role      string `yaml:"role"`
