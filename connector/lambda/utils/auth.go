@@ -131,22 +131,22 @@ func CheckIfAccessTokenIsValid(acces_token_expiration time.Time) bool {
 
 func GetNewAccessToken(single_credential_for_tpp map[string]string) *map[string]string {
 
-	c, err := tpp.NewConnector(single_credential_for_tpp["url"], "", false, nil)
+	c, err := tpp.NewConnector(single_credential_for_tpp["Url"], "", false, nil)
 	if err != nil {
 		log.Errorf("Failed to create TPP Connector: %v", err.Error())
 		return nil
 	}
 
-	auth := endpoint.Authentication{RefreshToken: single_credential_for_tpp["refresh_token"]}
+	auth := endpoint.Authentication{RefreshToken: single_credential_for_tpp["RefreshToken"]}
 
 	new_creds, err := c.RefreshAccessToken(&auth)
 	if err != nil {
 		log.Errorf("err: %v", err.Error())
 		return nil
 	}
-	single_credential_for_tpp["accessToken"] = new_creds.Access_token
-	single_credential_for_tpp["refreshToken"] = new_creds.Refresh_token
-	single_credential_for_tpp["accessTokenExpires"] = fmt.Sprintf("%d", new_creds.Expires)
+	single_credential_for_tpp["AccessToken"] = new_creds.Access_token
+	single_credential_for_tpp["RefreshToken"] = new_creds.Refresh_token
+	single_credential_for_tpp["AccessTokenExpires"] = fmt.Sprintf("%d", new_creds.Expires)
 	return &single_credential_for_tpp
 }
 
