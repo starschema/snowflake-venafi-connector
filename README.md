@@ -13,11 +13,11 @@ In the current version six Venafi REST API endpoints are integrated. You can use
 
 ## Table of content
 
-[Prerequisites for install](#prerequisites)
-[Integration Components](#integration-components)
-[Usage with Examples](#usage-with-examples)
-[Install with Command Line Tool](#install-with-command-line-tool)
-[Install Manually using AWS Console](#install-manually-using-aws-console)
+* [Prerequisites for install](#prerequisites)
+* [Integration Components](#integration-components)
+* [Usage with Examples](#usage-with-examples)
+* [Install with Command Line Tool](#install-with-command-line-tool)
+* [Install Manually using AWS Console](#install-manually-using-aws-console)
 
 ## Prerequisites
 
