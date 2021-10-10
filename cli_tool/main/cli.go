@@ -18,6 +18,7 @@ func Log(isVerbose bool, message string, tabIndex int, params ...interface{}) {
 		ret += "\t"
 	}
 	ret += message
+	log.SetPrefix("")
 	log.Printf(ret, params...)
 }
 
