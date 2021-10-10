@@ -3,6 +3,7 @@
 This integration allows you to manage your machine identities directly from Snowflake with the power of External Functions and AWS Lambdas
 
 In the current version six Venafi REST API endpoints are integrated. You can use this integration to:
+
 * Request a new machine identitiy
 * Pick up your machine identity
 * List your machine identitites from the TPP server
@@ -11,28 +12,28 @@ In the current version six Venafi REST API endpoints are integrated. You can use
 * Renew a machine identity
 
 ## Table of content
-[Prerequisites for install](##prerequisites)
-[Components of the integration](##components-of-the-integration)
-[Usage with Examples](##usage-with-examples)
-[Install with Command Line Tool](##install-with-command-line-tool)
-[Install Manually using AWS Console](##install-manually-using-aws-console)
 
-
+[Prerequisites for install](#prerequisites)
+[Integration Components](#integration-components)
+[Usage with Examples](#usage-with-examples)
+[Install with Command Line Tool](#install-with-command-line-tool)
+[Install Manually using AWS Console](#install-manually-using-aws-console)
 
 ## Prerequisites
+
 Integration was built and tested with Go version 1.16
 
 For installation a Snowflake account needed where the user who would like to install the solution has permission to create external functions and api integrations.
 
 An AWS account with the following permissions:
+
 * List buckets
 * Create buckets
 * List AWS Lambda functions
 * Create AWS Lambda functions
 * Create role
 
-
-## Components of the integration
+## Integration Components
 
 ### AWS
 
@@ -156,7 +157,7 @@ With this function you can revoke a machine identity. With a boolean as a last p
 SELECT REVOKE_MACHINE_ID('TLS', '<tpp_url>', '<request_id>', <should-disable>);
 ```
 
-## Install Manually Using the AWS Console
+## Install Manually Using AWS Console
 
 You can create the components of the integration manually from AWS Console and directly from Snowflake. In this way you are able to recieve a more customied solution.
 
@@ -300,11 +301,12 @@ Go back to your AWS console to the role you created for Snowflake.  Click on 'Ed
 ```
 
 Now you are ready. Make sure that:
+
  1. Your Lambda execution role has permission to create CloudWatch logs and to access your bucket
  2. You added Invoke permission for your Api Gateway
- 2. The API_AWS_IAM_USER_ARN and API_AWS_EXTERNAL_ID are set in the Snowflake role policy.
- 3. You created the S3 BUCKET and uploaded a valid credential json file.
- 4. You added the 3 needed environment variables to your lambda
+ 3. The API_AWS_IAM_USER_ARN and API_AWS_EXTERNAL_ID are set in the Snowflake role policy.
+ 4. You created the S3 BUCKET and uploaded a valid credential json file.
+ 5. You added the 3 needed environment variables to your lambda
 
 If all good, you can run your first query to request a machine id:
 
