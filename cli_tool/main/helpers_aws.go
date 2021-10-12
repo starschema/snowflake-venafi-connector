@@ -24,7 +24,7 @@ import (
 )
 
 const S3_CRED_FILE_NAME = "credentials.json"
-const LAMBDA_FUNCTION_NAME_PREFIX = "venafi-snowlake-func-"
+const LAMBDA_FUNCTION_NAME_PREFIX = "venafi-snowflake-func-"
 const LAMBDA_FUNCTION_NAME_GETMACHINEID = "getmachineid"
 const LAMBDA_FUNCTION_NAME_REQUESTMACHINEID = "requestmachineid"
 const LAMBDA_FUNCTION_NAME_LISTMACHINEIDS = "listmachineids"
@@ -213,7 +213,33 @@ func GetAwsPolicy(svc *iam.Client, policyARN string) StatusResult {
 }
 
 func CreateLambdaS3Role(svc *iam.Client, roleName string, bucket string) error {
-	_, err := svc.CreateRole(context.TODO(), &iam.CreateRoleInput{
+	policyResp, err := svc.CreatePolicy(context.TODO(), &iam.CreatePolicyInput{
+		PolicyName: aws.String(fmt.Sprintf("%s-%s", AWS_POLICY_TO_ACCESS_BUCKET, bucket)), //put bucket name to policy for easier remove / debug
+		PolicyDocument: aws.String(fmt.Sprintf(`{
+			"Version": "2012-10-17",
+			"Statement": [
+				{
+					"Effect": "Allow",
+					"Action": [
+						"s3:ListBucket"
+					],
+					"Resource": "arn:aws:s3:::%s"
+				},
+				{
+					"Effect": "Allow",
+					"Action": [
+						"s3:PutObject",
+						"s3:GetObject"
+					],
+					"Resource": "arn:aws:s3:::%s/*"
+				}
+			]
+		}`, bucket, bucket)),
+	})
+	if err != nil {
+		return err
+	}
+	_, err = svc.CreateRole(context.TODO(), &iam.CreateRoleInput{
 		RoleName:    aws.String(roleName),
 		Description: aws.String("Execution Role for AWS Lambdas to access S3"),
 		AssumeRolePolicyDocument: aws.String(`{
@@ -239,32 +265,6 @@ func CreateLambdaS3Role(svc *iam.Client, roleName string, bucket string) error {
 		return err
 	}
 
-	policyResp, err := svc.CreatePolicy(context.TODO(), &iam.CreatePolicyInput{
-		PolicyName: aws.String(AWS_POLICY_TO_ACCESS_BUCKET),
-		PolicyDocument: aws.String(fmt.Sprintf(`{
-			"Version": "2012-10-17",
-			"Statement": [
-				{
-					"Effect": "Allow",
-					"Action": [
-						"s3:ListBucket"
-					],
-					"Resource": "arn:aws:s3:::%s"
-				},
-				{
-					"Effect": "Allow",
-					"Action": [
-						"s3:PutObject",
-						"s3:GetObject"
-					],
-					"Resource": "arn:aws:s3:::%s/*"
-				}
-			]
-		}`, bucket, bucket)),
-	})
-	if err != nil {
-		return err
-	}
 	_, err = svc.AttachRolePolicy(context.TODO(), &iam.AttachRolePolicyInput{
 		RoleName:  aws.String(roleName),
 		PolicyArn: policyResp.Policy.Arn, // attach access to s3 bucket
@@ -374,7 +374,7 @@ func CreateRestAPI(svc *apigateway.Client, role, accountId string, region string
 }
 
 func IntegrateLambdaWithRestApi(svc *apigateway.Client, restApiID, parentResourceID, functionName, accountId, zone string) error {
-	uriStr := fmt.Sprintf("arn:aws:apigateway:%s:lambda:path/2015-03-31/functions/arn:aws:lambda:%s:%s:function:venafi-snowlake-func-%s/invocations", zone, zone, accountId, functionName)
+	uriStr := fmt.Sprintf("arn:aws:apigateway:%s:lambda:path/2015-03-31/functions/arn:aws:lambda:%s:%s:function:venafi-snowflake-func-%s/invocations", zone, zone, accountId, functionName)
 	resource, err := svc.CreateResource(context.TODO(), &apigateway.CreateResourceInput{
 		RestApiId: aws.String(restApiID),
 		ParentId:  aws.String(parentResourceID),

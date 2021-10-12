@@ -16,8 +16,10 @@ In the current version six Venafi REST API endpoints are integrated. You can use
 * [Prerequisites for install](#prerequisites)
 * [Integration Components](#integration-components)
 * [Usage with Examples](#usage-with-examples)
-* [Install with Command Line Tool](#install-with-command-line-tool)
+* [Automated Install ](#automated-install)
 * [Install Manually using AWS Console](#install-manually-using-aws-console)
+* [Uninstall the integration](#uninstall)
+
 
 ## Prerequisites
 
@@ -335,9 +337,9 @@ You can rename the code zip files, the handlers and the resources, but make sure
 Useful resources about AWS Lambda and Snowflake integration:
 https://docs.snowflake.com/en/sql-reference/external-functions-creating-aws-ui.html
 
-## Install with Command Line Tool
+## Automated Install
 
-The CLI tool provides an easy deploy for Venafi Snowflake Integration.
+The Automated Install provides an easy deploy for Venafi Snowflake Integration.
 Features:
 
 * Check the current status of your integration
@@ -348,9 +350,9 @@ Features:
 
 - *getcreds* - Get access token from Venafi Rest API with vcert-sdk client id
 
-- *install* - Get the status of the integration components in your environment
+- *install* - Install the integration to your AWS and Snowflake environment
 
-- *state* - Show the
+- *state* - Show the current state and components of the integration
 
 ### Prerequsites
 
@@ -367,11 +369,15 @@ region=eu-west-1
 ### Usage
 
 1. Clone the repository with `git clone https://github.com/starschema/snowflake-venafi-connector`
+
 2. `cd connector/cli_tool/main`
-3. There is an example_config.yml file which needs to be filled with your AWS, Snowflake and Venafi TPP server. This config file will be used by the installer to create the components of the integration. See the comments in the file.
+
+3. There is an example_config.yml. You have to create a config file similar to this. (You can use this example file as well, or you can create a secret file somewhere.) This config file will be used by the installer to create the components of the integration. See the comments in the file.
 4. Run `go run . status --file=<path-to-your-config>` to check the current status of your integration. This will give you a detailed description in which components are installed, and which not. Before the first install none of the components should be installed.
 5. Run `go run . install --file=<path-to-your-config>` Command to install the external functions to the configured Snowflake database and AWS Lambdas
 6. Run `go run . status --file=<path-to-your-config>` once again to check if all the components are available.
+
+Y
 
 ### Install steps
 
@@ -406,11 +412,45 @@ All set!
 
 ## Troubleshoot
 
-If the automatic installation fails at one point, run a status command to see which components are missing. You can create them manually by following the Manual Tutorial or you can try to re-run an install. In the bucket there will be a deployment info file, which will provide you information about your existing components. Make sure that you use the proper ID's during manual install.
+* Make sure that your AWS user has permission to create bucket, list buckets, create lambdas, list lambdas.
 
-Make sure that your AWS user has permission to create bucket, list buckets, create lambdas, list lambdas.
+* If the automatic installation fails at one point, run a status command to see which components are missing. You can create them manually by following the Manual Tutorial or you can try to re-run an install. In the bucket there will be a deployment info file, which will provide you information about your existing components. Make sure that you use the proper ID's during manual install.
 
-If the installation was successful but the Snowflake functions are still not working, check the logs of the function in the AWS Console Cloudwatch.
+* If you remove the Lambda execute role manually make sure to remove the attached policy with the bucket access as well.
+
+* If you would like to remove a Lambda function manually make sure to remove it from the Rest Api resources on the Api Gateway page.
+
+* If you would like to have a clean install for the functions and the Rest Api but you would like to keep your bucket, make sure you remove the deployment.info file from the bucket.
+
+* If the installation was successful but the Snowflake functions are still not working, check the logs of the function in the AWS Console Cloudwatch. To access Cloudwatch go to the AWS Lambdas page on the console and search for the Lambda functions. If you used the automatic install the prefix of these functions is venafi-snowflake-func. From the function page, you can access Cloudwatch under the Monitor tab.
 
 Please reach out with any question you might have.
 
+## Uninstall
+
+To uninstall the integration you have to remove the components manually. First you can simply drop the components in Snowflake. Example:
+
+```
+ drop integration venafi_integration
+
+ drop function GET_MACHINE_ID(VARCHAR, VARCHAR, VARCHAR)
+ drop function LIST_MACHINE_IDS(VARCHAR, VARCHAR, VARCHAR)
+ drop function REVOKE_MACHINE_ID(VARCHAR, VARCHAR, VARCHAR, BOOLEAN)
+ drop function RENEW_MACHINE_ID(VARCHAR, VARCHAR, VARCHAR)
+ drop function REQUEST_MACHINE_ID(VARCHAR, VARCHAR, ARRAY, VARCHAR,ARRAY,VARCHAR)
+ drop function GET_MACHINE_ID_STATUS(VARCHAR, VARCHAR, VARCHAR, VARCHAR)
+
+ drop function GET_MID(VARCHAR, VARCHAR, VARCHAR)
+ drop function LIST_MIDS(VARCHAR, VARCHAR, VARCHAR)
+ drop function REVOKE_MID(VARCHAR, VARCHAR, VARCHAR, BOOLEAN)
+ drop function RENEW_MID(VARCHAR, VARCHAR, VARCHAR)
+ drop function REQUEST_MID(VARCHAR, VARCHAR, ARRAY, VARCHAR,ARRAY,VARCHAR)
+ drop function GET_MID_STATUS(VARCHAR, VARCHAR, VARCHAR, VARCHAR)
+```
+
+In your AWS Console remove the deployed AWS Lambdas functions. If you used the automated install the prefix for these functions is "venafi-snowflake-func".
+In your S3 bucket you can find a deployment.info file. This will contain the IDs of your components, so you can make sure all
+You have to remove the created Venafi Rest Api on the API Gateway tab.
+You have to remove the two roles which were created (arn / name in deployment.info file)
+Remove the policy which is attached to your lambda execution role.
+As a last step you have to remove the files from your S3 bucket, then delete the bucket itself.
