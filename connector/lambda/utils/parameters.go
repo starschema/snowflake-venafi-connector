@@ -49,7 +49,7 @@ func ParseSnowflakeParameters(request events.APIGatewayProxyRequest, queryType s
 	configParameters.TppURL = fmt.Sprintf("%v", snowflakeParams[2])
 	switch queryType {
 	case LIST_MID_TYPE:
-		configParameters.Zone = fmt.Sprintf("%v", snowflakeParams[3]) // TODO: UPN, DNS should allow multiple values
+		configParameters.Zone = fmt.Sprintf("%v", snowflakeParams[3])
 	case GET_MID_TYPE:
 		requestParameters.RequestID = strings.Replace(fmt.Sprintf("%v", snowflakeData.Data[0][3]), "\\", "\\\\", -1)
 	case GET_STATUS_MID_TYPE:
