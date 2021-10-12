@@ -5,7 +5,6 @@ import (
 	"crypto/x509/pkix"
 	"encoding/json"
 	"fmt"
-	"math/rand"
 	"strings"
 	"time"
 
@@ -69,23 +68,22 @@ func NewVenafiConnector(configParams ConfigParameters) (*venafiConnector, error)
 	}, nil
 }
 
-func generateRandomKeyPassword() string {
-	rand.Seed(time.Now().UnixNano())
-	chars := []rune("ABCDEFGHIJKLMNOPQRSTUVWXYZÅÄÖ" +
-		"abcdefghijklmnopqrstuvwxyzåäö" +
-		"0123456789" +
-		"+/?_#$!~>~@#$&*(")
-	length := 8
-	var b strings.Builder
-	for i := 0; i < length; i++ {
-		b.WriteRune(chars[rand.Intn(len(chars))])
-	}
-	str := b.String() // E.g. "ExcbsVQs"
-	return str
-}
+// func generateRandomKeyPassword() string {
+// 	rand.Seed(time.Now().UnixNano())
+// 	chars := []rune("ABCDEFGHIJKLMNOPQRSTUVWXYZÅÄÖ" +
+// 		"abcdefghijklmnopqrstuvwxyzåäö" +
+// 		"0123456789" +
+// 		"+/?_#$!~>~@#$&*(")
+// 	length := 8
+// 	var b strings.Builder
+// 	for i := 0; i < length; i++ {
+// 		b.WriteRune(chars[rand.Intn(len(chars))])
+// 	}
+// 	str := b.String() // E.g. "ExcbsVQs"
+// 	return str
+// }
 
 func (c *venafiConnector) RequestMachineID(ctx context.Context, cn string, upn []string, dns []string) (string, error) {
-	password := generateRandomKeyPassword()
 	enrollReq := &certificate.Request{
 		Subject: pkix.Name{
 			CommonName: cn,
@@ -95,7 +93,7 @@ func (c *venafiConnector) RequestMachineID(ctx context.Context, cn string, upn [
 		CsrOrigin:   certificate.LocalGeneratedCSR,
 		KeyType:     certificate.KeyTypeRSA,
 		KeyLength:   2048,
-		KeyPassword: password,
+		KeyPassword: "",
 	}
 	err := c.client.GenerateRequest(nil, enrollReq)
 	if err != nil {

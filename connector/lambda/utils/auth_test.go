@@ -13,9 +13,9 @@ func Test_shouldRequestNewToken(t *testing.T) {
 	tokenListWithValidToken := []credentialJSON{
 		map[string]string{
 			"Url":                testTPPUrl,
-			"accessToken":        "test-access-token",
-			"refreshToken":       "test-refresh-token",
-			"accessTokenExpires": "2021-12-28T16:17:19Z",
+			"AccessToken":        "test-access-token",
+			"RefreshToken":       "test-refresh-token",
+			"AccessTokenExpires": "2021-12-28T16:17:19Z",
 		},
 	}
 
@@ -23,18 +23,18 @@ func Test_shouldRequestNewToken(t *testing.T) {
 		map[string]string{
 
 			"Url":                testTPPUrl,
-			"accessToken":        "test-access-token2",
-			"refreshToken":       "test-refresh-token2",
-			"accessTokenExpires": "2020-12-28T16:17:19Z",
+			"AccessToken":        "test-access-token2",
+			"RefreshToken":       "test-refresh-token2",
+			"AccessTokenExpires": "2020-12-28T16:17:19Z",
 		},
 	}
 
 	mapWithInvalidTPPUrl := []credentialJSON{
 		map[string]string{
 			"Url":                "",
-			"accessToken":        "test-access-token3",
-			"refreshToken":       "test-refresh-token3",
-			"accessTokenExpires": "2021-12-28T16:17:19Z",
+			"AccessToken":        "test-access-token3",
+			"RefreshToken":       "test-refresh-token3",
+			"AccessTokenExpires": "2021-12-28T16:17:19Z",
 		},
 	}
 

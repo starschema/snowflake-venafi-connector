@@ -137,7 +137,7 @@ func GetNewAccessToken(single_credential_for_tpp map[string]string) *map[string]
 		return nil
 	}
 
-	auth := endpoint.Authentication{RefreshToken: single_credential_for_tpp["refreshToken"]}
+	auth := endpoint.Authentication{RefreshToken: single_credential_for_tpp["RefreshToken"]}
 
 	new_creds, err := c.RefreshAccessToken(&auth)
 	if err != nil {
