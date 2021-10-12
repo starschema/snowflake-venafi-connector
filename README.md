@@ -16,7 +16,7 @@ In the current version six Venafi REST API endpoints are integrated. You can use
 * [Prerequisites for install](#prerequisites)
 * [Integration Components](#integration-components)
 * [Usage with Examples](#usage-with-examples)
-* [Install with Command Line Tool](#install-with-command-line-tool)
+* [Automated Install](#install-with-command-line-tool)
 * [Install Manually using AWS Console](#install-manually-using-aws-console)
 * [Troubleshoot](#troubleshoot)
 * [Uninstall the integration](#uninstall)
@@ -39,7 +39,7 @@ An AWS account with the following permissions:
 
 ### AWS
 
-* An S3 bucket in AWS where a json file stored with Venafi credentials.
+* An S3 bucket in AWS where a json file will be stored with Venafi credentials.
 
 * A role which has permission both to the Lambda functions and to access the bucket with the credentials.
 More information: [https://docs.aws.amazon.com/IAM/latest/UserGuide/id_roles_create.html]
@@ -86,12 +86,11 @@ In Snowflake the following external functions will be created:
 The functions will either return a json string or a single string. You can parse the needed values by using the built-in json parser from Snowflake.
 #### Request a new Machine Identity
 
-When you request a new machine identity you will get back the requested certificate with a private key and passphrase.
+When you request a new machine identity you will get back the requested certificate with a private key.
 ```
 SELECT
     JSON_REQUEST_CERT:Certificate AS CERT,
-    JSON_REQUEST_CERT:PrivateKey AS PRIVATE_KEY,
-    JSON_REQUEST_CERT:passphrase AS PASSPHRASE
+    JSON_REQUEST_CERT:PrivateKey AS PRIVATE_KEY
 FROM (
     SELECT PARSE_JSON(
         REQUEST_MACHINE_ID
@@ -106,7 +105,7 @@ FROM (
     );
 ```
 #### Pick up a Machine Identity
-When you request a new certificate the function will retrieve you the request id for the new cert. You can also list the request ids for existing certificates using LIST_MACHINE_IDS endpoint.
+You can pick up an existing machine identity by using this function. The function will retrieve the machine identity.
 ```
 SELECT
     JSON_CERT:Certificate
@@ -141,7 +140,7 @@ FROM (
 ```
 #### Get status of a Machine Identity
 With this function you can check if a machine identity is enabled or disabled. You will get a single string as a response.
-To request a machine identity:
+To get a status of a machine identity use this query:
 ```
 SELECT GET_MACHINE_ID_STATUS('TLS', <tpp_url>, <zone>, <common_name>);
 ```
@@ -170,11 +169,15 @@ In this walkthrough we will install the "REQUEST_MACHINE_ID" external function.
 
 #### Clone repository and get the executables
 
-`git clone https://github.com/starschema/snowflake-venafi-connector`
-`cd connector/bin/handlers`
-Here you can see the executables for the functions. These will be needed for the AWS Lambda creation. You can also build your own executable from code. Example:
-`cd main/lambda/request_machine_id`
-`GOOS=linux GOARCH=amd64  go build -o /path/to/new/executable/requestmachineid` command
+1. `git clone https://github.com/starschema/snowflake-venafi-connector`
+
+2. Each Lambda function will need a zip file with an executable. These executables can be found under the cli_tool/main/bin/handlers folder. You can use these executables or you can build them for yourself:
+
+```
+cd connector/main/lambda/request_machine_id
+GOOS=linux GOARCH=amd64  go build -o /path/to/new/executable/requestmachineid
+```
+
 To finish the next steps log in to AWS Console: https://console.aws.amazon.com
 
 #### Create an empty role for Snowflake
@@ -315,8 +318,7 @@ If all good, you can run your first query to request a machine id:
 
 ```SELECT
     JSON_REQUEST_CERT:Certificate AS CERT,
-    JSON_REQUEST_CERT:PrivateKey AS PRIVATE_KEY,
-    JSON_REQUEST_CERT:passhprase AS PASSPHRASE
+    JSON_REQUEST_CERT:PrivateKey AS PRIVATE_KEY
 FROM (
     SELECT PARSE_JSON(
         REQUEST_MACHINE_ID
@@ -338,7 +340,7 @@ You can rename the code zip files, the handlers and the resources, but make sure
 Useful resources about AWS Lambda and Snowflake integration:
 https://docs.snowflake.com/en/sql-reference/external-functions-creating-aws-ui.html
 
-## Install with Command Line Tool
+## Automated Install
 
 The CLI tool provides an easy deploy for Venafi Snowflake Integration.
 Features:
