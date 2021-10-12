@@ -17,6 +17,12 @@ import (
 type venafiConnector struct {
 	client endpoint.Connector
 }
+type RequestMachineIDResponse struct {
+	Certificate string `json:"Certificate"`
+	PrivateKey  string `json:"PrivateKey"`
+	Passphrase  string `json:"Passphrase"`
+	RequestID   string `json:"RequestID"`
+}
 
 type VenafiConnector interface {
 	RequestMachineID(ctx context.Context, commonName, upn, dns string) (string, error)
@@ -29,6 +35,12 @@ type VenafiConnector interface {
 
 func createSnowflakeResponse(data string) string {
 	return fmt.Sprintf("{'data': [[0, '%v']]}", data)
+}
+
+func createSnowflakeResponseWithEscape(data []byte) string {
+	escapedStr := strings.ReplaceAll(string(data), "\\", "\\\\")
+	c := fmt.Sprintf("{'data': [[0, '%v']]}", escapedStr) // we can only return one row
+	return c
 }
 
 func NewVenafiConnector(configParams ConfigParameters) (*venafiConnector, error) {
@@ -56,31 +68,62 @@ func NewVenafiConnector(configParams ConfigParameters) (*venafiConnector, error)
 	}, nil
 }
 
-func (c *venafiConnector) RequestMachineID(ctx context.Context, cn string, up string, dns string) (string, error) {
+// func generateRandomKeyPassword() string {
+// 	rand.Seed(time.Now().UnixNano())
+// 	chars := []rune("ABCDEFGHIJKLMNOPQRSTUVWXYZÅÄÖ" +
+// 		"abcdefghijklmnopqrstuvwxyzåäö" +
+// 		"0123456789" +
+// 		"+/?_#$!~>~@#$&*(")
+// 	length := 8
+// 	var b strings.Builder
+// 	for i := 0; i < length; i++ {
+// 		b.WriteRune(chars[rand.Intn(len(chars))])
+// 	}
+// 	str := b.String() // E.g. "ExcbsVQs"
+// 	return str
+// }
+
+func (c *venafiConnector) RequestMachineID(ctx context.Context, cn string, upn []string, dns []string) (string, error) {
 	enrollReq := &certificate.Request{
 		Subject: pkix.Name{
 			CommonName: cn,
 		},
-		UPNs:     []string{up},
-		DNSNames: []string{dns},
+		UPNs:        upn,
+		DNSNames:    dns,
+		CsrOrigin:   certificate.LocalGeneratedCSR,
+		KeyType:     certificate.KeyTypeRSA,
+		KeyLength:   2048,
+		KeyPassword: "",
 	}
 	err := c.client.GenerateRequest(nil, enrollReq)
 	if err != nil {
 		log.Errorf("Failed to generate request: %v ", err)
-		return createSnowflakeResponse(err.Error()), err
+		return createSnowflakeResponse(err.Error()), nil // return nil here, because we would like to see the error in Snowflake
 	}
 
-	log.Info("Generate request was successful")
-	// Request a new certificate using Venafi API
 	requestID, err := c.client.RequestCertificate(enrollReq)
 	if err != nil {
 		log.Errorf("Failed to request certificate:: %v ", err)
+		return createSnowflakeResponse(err.Error()), nil // return nil here, because we would like to see the error in Snowflake
+	}
+
+	enrollReq.PickupID = requestID
+	enrollReq.Timeout = 180 * time.Second
+	pcc, err := c.client.RetrieveCertificate(enrollReq)
+	if err != nil {
+		return createSnowflakeResponse(err.Error()), nil // return nil here, because we would like to see the error in Snowflake
+	}
+
+	pcc.AddPrivateKey(enrollReq.PrivateKey, []byte(enrollReq.KeyPassword))
+	escaped_requestID := strings.Replace(fmt.Sprintf("%v", requestID), "\\", "\\\\", -1)
+	responseObject := RequestMachineIDResponse{Certificate: pcc.Certificate, PrivateKey: pcc.PrivateKey, Passphrase: enrollReq.KeyPassword, RequestID: escaped_requestID}
+	data, err := json.Marshal(responseObject)
+	if err != nil {
 		return createSnowflakeResponse(err.Error()), err
 	}
 
-	escaped_requestID := strings.Replace(fmt.Sprintf("%v", requestID), "\\", "\\\\", -1)
 	// Transform data to a form which is readable by Snowflake
-	return createSnowflakeResponse(escaped_requestID), nil
+	return createSnowflakeResponseWithEscape(data), nil
 }
 
 func (c *venafiConnector) GetMachineID(ctx context.Context, requestID string) (string, error) {
@@ -92,7 +135,7 @@ func (c *venafiConnector) GetMachineID(ctx context.Context, requestID string) (s
 	pcc, err := c.client.RetrieveCertificate(pickupReq)
 	if err != nil {
 		log.Errorf("Could not get certificate: %s", err)
-		return createSnowflakeResponse(err.Error()), err
+		return createSnowflakeResponse(err.Error()), nil
 	}
 
 	bytes, err := json.Marshal(pcc)
@@ -100,18 +143,23 @@ func (c *venafiConnector) GetMachineID(ctx context.Context, requestID string) (s
 		log.Errorf("Failed to serialize certificate: %v", err)
 		return createSnowflakeResponse(err.Error()), err
 	}
-	return createSnowflakeResponse(string(bytes)), nil
+	return createSnowflakeResponseWithEscape(bytes), nil
 }
 
 func (c *venafiConnector) ListMachineIDs(ctx context.Context) (string, error) {
 	certList, err := c.client.ListCertificates(endpoint.Filter{})
 	if err != nil {
 		log.Errorf("Failed to list certificates: %s", err)
+		return createSnowflakeResponse(err.Error()), nil
+	}
+	bytes, err := json.Marshal(certList)
+	if err != nil {
+		log.Errorf("Failed to serialize certificate: %v", err)
 		return createSnowflakeResponse(err.Error()), err
 	}
 	log.Info("Sucessfully called List Certificates")
 	// Transform data to a form which is readable by Snowflake
-	return createSnowflakeResponse(fmt.Sprintf("%s", certList)), nil
+	return createSnowflakeResponseWithEscape(bytes), nil
 }
 
 func (c *venafiConnector) RevokeMachineID(ctx context.Context, requestID string, disable bool) (string, error) {
@@ -123,7 +171,7 @@ func (c *venafiConnector) RevokeMachineID(ctx context.Context, requestID string,
 	err := c.client.RevokeCertificate(revokeReq)
 	if err != nil {
 		log.Errorf("Failed to revoke cert: %v", err)
-		return createSnowflakeResponse(err.Error()), err
+		return createSnowflakeResponse(err.Error()), nil
 	}
 	return createSnowflakeResponse(requestID), nil
 }
@@ -136,7 +184,7 @@ func (c *venafiConnector) RenewMachineID(ctx context.Context, requestID string) 
 	requestID, err := c.client.RenewCertificate(renewReq)
 	if err != nil {
 		log.Errorf("Failed to renew certificate: %v", err)
-		return createSnowflakeResponse(err.Error()), err
+		return createSnowflakeResponse(err.Error()), nil
 	}
 	return createSnowflakeResponse(requestID), nil
 }
@@ -150,7 +198,7 @@ func (c *venafiConnector) GetMachineIDStatus(ctx context.Context, cn string) (st
 	err := c.client.GenerateRequest(nil, enrollReq)
 	if err != nil {
 		log.Errorf("Failed to generate request: %v ", err)
-		return createSnowflakeResponse(err.Error()), err
+		return createSnowflakeResponse(err.Error()), nil
 	}
 
 	log.Info("Generate request was successful")
@@ -161,8 +209,8 @@ func (c *venafiConnector) GetMachineIDStatus(ctx context.Context, cn string) (st
 			return createSnowflakeResponse("Certificate is disabled"), nil
 		} else {
 			log.Errorf("Failed to get status of certificate: %v ", err)
-			return createSnowflakeResponse(err.Error()), err
+			return createSnowflakeResponse(err.Error()), nil
 		}
 	}
-	return createSnowflakeResponse("Certificate is enabled"), err
+	return createSnowflakeResponse("Certificate is enabled"), nil
 }
