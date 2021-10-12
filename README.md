@@ -18,6 +18,8 @@ In the current version six Venafi REST API endpoints are integrated. You can use
 * [Usage with Examples](#usage-with-examples)
 * [Install with Command Line Tool](#install-with-command-line-tool)
 * [Install Manually using AWS Console](#install-manually-using-aws-console)
+* [Troubleshoot](#troubleshoot)
+* [Uninstall the integration](#uninstall)
 
 ## Prerequisites
 
@@ -76,6 +78,7 @@ In Snowflake the following external functions will be created:
  * RENEW_MACHINE_ID  (<type:string>, <tpp_url:string>, <zone:string)
  * REVOKE_MACHINE_ID  (<type:string>, <tpp_url:string>, <request_id:string)
  * LIST_MACHINE_IDS (<type:string>, <tpp_url:string>, <request_id:string)
+
 
 ### Usage with Examples
 
@@ -413,3 +416,32 @@ Make sure that your AWS user has permission to create bucket, list buckets, crea
 If the installation was successful but the Snowflake functions are still not working, check the logs of the function in the AWS Console Cloudwatch.
 
 Please reach out with any question you might have.
+
+## Uninstall
+
+To uninstall the integration you have to remove the components manually. First you can simply drop the components in Snowflake. Example:
+
+```
+ drop integration venafi_integration
+
+ drop function GET_MACHINE_ID(VARCHAR, VARCHAR, VARCHAR)
+ drop function LIST_MACHINE_IDS(VARCHAR, VARCHAR, VARCHAR)
+ drop function REVOKE_MACHINE_ID(VARCHAR, VARCHAR, VARCHAR, BOOLEAN)
+ drop function RENEW_MACHINE_ID(VARCHAR, VARCHAR, VARCHAR)
+ drop function REQUEST_MACHINE_ID(VARCHAR, VARCHAR, ARRAY, VARCHAR,ARRAY,VARCHAR)
+ drop function GET_MACHINE_ID_STATUS(VARCHAR, VARCHAR, VARCHAR, VARCHAR)
+
+ drop function GET_MID(VARCHAR, VARCHAR, VARCHAR)
+ drop function LIST_MIDS(VARCHAR, VARCHAR, VARCHAR)
+ drop function REVOKE_MID(VARCHAR, VARCHAR, VARCHAR, BOOLEAN)
+ drop function RENEW_MID(VARCHAR, VARCHAR, VARCHAR)
+ drop function REQUEST_MID(VARCHAR, VARCHAR, ARRAY, VARCHAR,ARRAY,VARCHAR)
+ drop function GET_MID_STATUS(VARCHAR, VARCHAR, VARCHAR, VARCHAR)
+```
+
+In your AWS Console remove the deployed AWS Lambdas functions. If you used the automated install the prefix for these functions is "venafi-snowflake-func".
+In your S3 bucket you can find a deployment.info file. This will contain the IDs of your components, so you can make sure all
+You have to remove the created Venafi Rest Api on the API Gateway tab.
+You have to remove the two roles which were created (arn / name in deployment.info file)
+Remove the policy which is attached to your lambda execution role.
+As a last step you have to remove the files from your S3 bucket, then delete the bucket itself.
