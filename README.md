@@ -1,4 +1,4 @@
-# snowflake-venafi-connector
+# Venafi Integration for Snowflake
 
 This integration allows you to manage your machine identities directly from Snowflake with the power of External Functions and AWS Lambdas
 
