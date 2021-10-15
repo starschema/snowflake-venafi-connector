@@ -16,7 +16,7 @@ In the current version six Venafi REST API endpoints are integrated. You can use
 * [Prerequisites for install](#prerequisites)
 * [Integration Components](#integration-components)
 * [Usage with Examples](#usage-with-examples)
-* [Automated Install](#install-with-command-line-tool)
+* [Automated Install](#automated-install)
 * [Install Manually using AWS Console](#install-manually-using-aws-console)
 * [Troubleshoot](#troubleshoot)
 * [Uninstall the integration](#uninstall)
@@ -353,9 +353,9 @@ Features:
 
 - *getcreds* - Get access token from Venafi Rest API with vcert-sdk client id
 
-- *install* - Get the status of the integration components in your environment
+- *install* - Install the External Functions and Lambdas to your environment
 
-- *state* - Show the
+- *state* - Show the current state of the integration, check the missing components
 
 ### Prerequsites
 
